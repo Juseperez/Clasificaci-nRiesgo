@@ -1,10 +1,10 @@
 {
   "entorno": {
-    "fecha_ejecucion": "2026-08-16T14:06:55-05:00",
-    "python": "3.13.14",
-    "sistema": "Windows 10",
-    "procesador": "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel",
-    "cpus": 4,
+    "fecha_ejecucion": "2026-08-16T15:07:30-05:00",
+    "python": "3.14.3",
+    "sistema": "Windows 11",
+    "procesador": "Intel64 Family 6 Model 142 Stepping 10, GenuineIntel",
+    "cpus": 8,
     "numpy": "2.5.2",
     "pandas": "3.0.5"
   },
@@ -17,7 +17,10 @@
       "F1 medio": 0.4923,
       "F1 alto": 1.0,
       "recall alto": 1.0,
-      "Brier": 0.2845
+      "Brier": 0.2845,
+      "AUC bajo": 0.8595,
+      "AUC medio": 0.7903,
+      "AUC alto": 1.0
     },
     {
       "modelo": "sklearn RandomForest (referencia)",
@@ -27,7 +30,10 @@
       "F1 medio": 0.5,
       "F1 alto": 1.0,
       "recall alto": 1.0,
-      "Brier": 0.306
+      "Brier": 0.306,
+      "AUC bajo": 0.8584,
+      "AUC medio": 0.7874,
+      "AUC alto": 1.0
     },
     {
       "modelo": "baseline: persistencia",
@@ -37,7 +43,10 @@
       "F1 medio": 0.3509,
       "F1 alto": 1.0,
       "recall alto": 1.0,
-      "Brier": NaN
+      "Brier": null,
+      "AUC bajo": null,
+      "AUC medio": null,
+      "AUC alto": null
     },
     {
       "modelo": "baseline: moda historica",
@@ -47,7 +56,10 @@
       "F1 medio": 0.4424,
       "F1 alto": 0.8333,
       "recall alto": 0.7143,
-      "Brier": NaN
+      "Brier": null,
+      "AUC bajo": null,
+      "AUC medio": null,
+      "AUC alto": null
     },
     {
       "modelo": "baseline: clase mayoritaria",
@@ -57,7 +69,10 @@
       "F1 medio": 0.0,
       "F1 alto": 0.0,
       "recall alto": 0.0,
-      "Brier": NaN
+      "Brier": null,
+      "AUC bajo": null,
+      "AUC medio": null,
+      "AUC alto": null
     }
   ],
   "por_unidad": [
@@ -274,10 +289,10 @@
     "submuestra_por_arbol": 7224
   },
   "tiempos_s": {
-    "preprocesamiento": 143.6,
+    "preprocesamiento": 128.6,
     "construccion_X": 0.0,
-    "entrenamiento_bosque_definitivo": 25.5
+    "entrenamiento_bosque_definitivo": 18.9
   },
-  "memoria_pico_MB": 562.6,
+  "memoria_pico_MB": 593.2,
   "semana_objetivo": "2025-12-29"
 }

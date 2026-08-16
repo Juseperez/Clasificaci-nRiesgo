@@ -51,7 +51,7 @@ El proyecto fue **implementado, probado y ejecutado completamente** utilizando l
 
 La versión final verifica:
 
-- **37/37 pruebas automáticas superadas**;
+- **44/44 pruebas automáticas superadas**;
 - preprocesamiento completo de los datos del ECU 911;
 - descarte explícito de semanas finales incompletas para evitar días faltantes tratados como cero;
 - construcción de la representación parroquia × día;
@@ -72,12 +72,18 @@ La corrida definitiva se realizó el **16 de agosto de 2026**.
 Entorno registrado:
 
 ```text
-Sistema operativo : Windows 10
-Python            : 3.13.14
-CPU disponibles   : 4
+Sistema operativo : Windows 11
+Python            : 3.14.3
+CPU disponibles   : 8
 NumPy             : 2.5.2
 pandas            : 3.0.5
 ```
+
+El mismo notebook, sin ningún cambio de código, se ejecutó también en un
+segundo equipo (Windows 10 / Python 3.13.14 / 4 CPUs) y produjo métricas
+**bit a bit idénticas**: F1 macro 0.7822, exactitud 0.8114, umbrales P60=0 /
+P90=121. Solo variaron los tiempos y el pico de memoria, listados en la
+sección 20.
 
 ---
 
@@ -322,6 +328,10 @@ No se incluyen características de vecindad entre parroquias.
 
 La fuente no contiene coordenadas, por lo que no existe una relación geométrica verificable que permita construir una vecindad espacial sin introducir supuestos artificiales.
 
+### `Cod_Parroquia` no es una variable numérica del modelo
+
+`Cod_Parroquia` no entra al modelo como número: solo se usa como índice de fila del tensor (sección 6). Sin embargo, la señal espacial no desaparece del todo: `densidad_historica_parroquia` es una media histórica **por unidad**, y en la práctica identifica a la cabecera cantonal de forma casi unívoca, porque su volumen de incidentes no se superpone con el de las otras cinco parroquias. Esto es coherente con el diseño (la unidad no debe tratarse como un número ordenado) y se documenta aquí para que quede explícito qué parte de la identidad de la unidad sí llega al modelo, y por qué vía.
+
 ---
 
 ## 8. Construcción de la etiqueta
@@ -366,6 +376,36 @@ Distribución resultante en entrenamiento:
 | Alto | 9.911 % |
 
 No fue necesario recurrir a reglas alternativas de construcción de etiquetas.
+
+### Qué significan las clases con `P60 = 0`
+
+```text
+Bajo  = exactamente 0 incidentes ese día
+Medio = entre 1 y 121 incidentes
+Alto  = más de 121 incidentes
+```
+
+`P60 = 0` no es un defecto del ajuste: con **63.69 %** de ceros en el conteo
+diario de entrenamiento, el percentil 60 de una variable discreta *es* 0. La
+escalera de respaldo (sección 7 del código, `caracteristicas.py`) existe
+precisamente para el caso en que los percentiles colapsan, y no se activó
+porque el peldaño `global` sí produjo las tres clases con masa suficiente.
+
+La consecuencia práctica es que, para cinco de las seis parroquias, el
+problema se reduce casi a una decisión binaria — ¿habrá al menos un incidente
+ese día? — porque ninguna de ellas se acerca al umbral de 121:
+
+| Parroquia | Máx. diario (train) | % días ≥ 1 incidente | % días > 121 |
+|---|---:|---:|---:|
+| Guayaquil, cabecera cantonal | 450 | 98.7 % | 59.5 % |
+| Juan Gómez Rendón (Progreso) | 9 | 60.8 % | 0.0 % |
+| Morro | 4 | 8.8 % | 0.0 % |
+| Posorja | 6 | 23.3 % | 0.0 % |
+| Puná | 1 | 0.5 % | 0.0 % |
+| Tenguel | 5 | 25.8 % | 0.0 % |
+
+Esta tabla es la base de la sección 11 y explica por qué la clase Alto queda
+casi exclusivamente reservada a la cabecera cantonal.
 
 ---
 
@@ -499,19 +539,25 @@ Medio = 0.7903
 Alto  = 1.0000
 ```
 
+### Convención del Brier Score
+
+El Brier reportado es la versión multiclase en forma-suma (media del error cuadrático sobre el vector one-hot), con rango **[0, 2]**: 0 es la predicción perfecta y 0.667 corresponde a un clasificador que siempre asigna probabilidad uniforme (1/3, 1/3, 1/3) a las tres clases. El valor obtenido por el bosque propio, **0.2845**, se interpreta contra esa referencia, no contra la escala [0, 1] habitual del Brier binario.
+
 ---
 
 ## 11. Resultados finales
 
 ### Comparación sobre el conjunto de prueba
 
-| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Recall Alto | Brier |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| **Bosque propio (NumPy)** | **0.8114** | **0.7822** | **0.8544** | 0.4923 | **1.0000** | **1.0000** | **0.2845** |
-| sklearn RandomForest | 0.8000 | 0.7807 | 0.8421 | **0.5000** | 1.0000 | 1.0000 | 0.3060 |
-| Persistencia | 0.7533 | 0.7197 | 0.8083 | 0.3509 | 1.0000 | 1.0000 | — |
-| Moda histórica | 0.7743 | 0.7132 | 0.8640 | 0.4424 | 0.8333 | 0.7143 | — |
-| Clase mayoritaria | 0.6429 | 0.2609 | 0.7826 | 0.0000 | 0.0000 | 0.0000 | — |
+| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Media F1 Bajo/Medio | Recall Alto | Brier |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| **Bosque propio (NumPy)** | **0.8114** | **0.7822** | **0.8544** | 0.4923 | **1.0000** | **0.6734** | **1.0000** | **0.2845** |
+| sklearn RandomForest | 0.8000 | 0.7807 | 0.8421 | **0.5000** | 1.0000 | 0.6711 | 1.0000 | 0.3060 |
+| Persistencia | 0.7533 | 0.7197 | 0.8083 | 0.3509 | 1.0000 | 0.5796 | 1.0000 | — |
+| Moda histórica | 0.7743 | 0.7132 | 0.8640 | 0.4424 | 0.8333 | 0.6532 | 0.7143 | — |
+| Clase mayoritaria | 0.6429 | 0.2609 | 0.7826 | 0.0000 | 0.0000 | 0.3913 | 0.0000 | — |
+
+La columna **Media F1 Bajo/Medio** se explica en el bloque siguiente: es la métrica complementaria que aísla la parte del problema que no está resuelta de antemano por la geografía.
 
 Resultados principales del modelo propio:
 
@@ -536,6 +582,14 @@ y también supera los tres baselines evaluados sobre exactamente el mismo conjun
 La clase **Medio** continúa siendo la más difícil de discriminar.
 
 El desempeño perfecto observado para la clase **Alto** debe interpretarse junto con la fuerte concentración de esa clase en la cabecera cantonal.
+
+### La clase Alto es estructuralmente degenerada
+
+La clase Alto es estructuralmente degenerada: `P90 = 121` es un umbral absoluto y el máximo diario histórico de las otras cinco parroquias es 9, 4, 6, 1 y 5 incidentes (sección 8). Ninguna puede alcanzarlo.
+
+Una regla trivial sin modelo, `unidad == cabecera → Alto`, obtiene **F1 = 1.0000 en prueba** y 0.9972 en validación: exactamente lo mismo que el clasificador propio.
+
+Por tanto, de los tres sumandos del F1 macro, uno se obtiene sin aprendizaje. La capacidad predictiva real del modelo debe leerse sobre Bajo/Medio, donde el bosque propio obtiene **0.6734** frente a 0.6532 de la mejor referencia (moda histórica) y 0.5796 de persistencia — un margen de +0.020 y +0.094 respectivamente, modesto pero real. El F1 macro de 0.7822 sigue siendo la métrica titular del proyecto y se reporta sin cambios; esta sección es la lectura que lo acompaña, no un reemplazo.
 
 ---
 
@@ -621,6 +675,8 @@ F1 Alto = 1.0000
 
 no debe interpretarse como evidencia de desempeño uniforme en todo el cantón.
 
+Esta tabla es la evidencia directa de la degeneración de la clase Alto descrita en la sección 11: la columna Alto es 0 para las cinco parroquias no cabecera, en las tres particiones (train, validación y prueba).
+
 La diferenciación entre **Bajo** y **Medio** constituye el principal reto del clasificador.
 
 ---
@@ -663,7 +719,7 @@ Esto limita la cantidad de ejemplos disponibles para parroquias con menor volume
 
 La publicación utilizada comienza el **1 de julio de 2021** y termina el **31 de diciembre de 2025**.
 
-La primera semana calendario del tensor comienza el **28/06/2021**, por lo que sus primeros tres días quedan fuera del periodo disponible.
+La primera semana calendario del tensor comienza el **28/06/2021**, por lo que sus primeros tres días quedan fuera del periodo disponible y se cuentan como cero incidentes.
 
 Esta semana se encuentra dentro del:
 
@@ -671,7 +727,7 @@ Esta semana se encuentra dentro del:
 BURN_IN = 12
 ```
 
-y no se utiliza como objetivo supervisado.
+y por eso **no se utiliza como objetivo supervisado**: los tres días faltantes solo podrían distorsionar una etiqueta si esa semana llegara a ser una fila de entrenamiento, validación o prueba, y el burn-in lo impide.
 
 El sistema también descarta explícitamente la semana final incompleta.
 
@@ -714,6 +770,8 @@ También se verificó que los subtipos de tránsito observados en febrero no apa
 No se identificó una regla objetiva y verificable que permitiera corregir o reclasificar los registros de enero de 2024.
 
 Por ello, **no se realizaron imputaciones ni reclasificaciones artificiales**: el archivo se conservó tal como fue publicado y la anomalía se documenta como una limitación de calidad de la fuente.
+
+Consecuencia directa sobre las etiquetas: los **16 días clasificados como Bajo en la cabecera cantonal durante el entrenamiento** (frente a una mayoría de Medio/Alto el resto del periodo) provienen íntegramente de este defecto de la fuente — corresponden a las cinco semanas de enero de 2024, cuando el conteo diario de la cabecera cae a valores de 0 a 2 incidentes por la caída puntual de registros. No se trata de una variación real del riesgo.
 
 ---
 
@@ -866,13 +924,17 @@ supera los tres baselines.
 La corrida definitiva registró:
 
 ```text
-Preprocesamiento            : 143.6 s
+Preprocesamiento            : 128.6 s
 Construcción de X           : ~0.0 s
-Entrenamiento bosque final  : 25.5 s
-Memoria pico                : 562.6 MB
+Entrenamiento bosque final  : 18.9 s
+Memoria pico                : 593.2 MB
 ```
 
 El prefiltrado mensual controla el uso de memoria al evitar conservar simultáneamente registros nacionales fuera del alcance.
+
+### Reproducibilidad entre equipos
+
+El pipeline es determinista. La misma versión del notebook se ejecutó en dos equipos distintos —Windows 10 / Python 3.13.14 / 4 CPU y Windows 11 / Python 3.14.3 / 8 CPU— y produjo métricas idénticas hasta el último decimal (F1 macro 0.7822, Accuracy 0.8114, umbrales 0/121). Solo variaron los tiempos y la memoria, que dependen del hardware y no del código ni de la semilla.
 
 ### Convergencia del ensamble
 
@@ -918,7 +980,8 @@ Grupo10_P2/
 ├── tests/
 │   ├── test_gini.py
 │   ├── test_pipeline.py
-│   └── test_representacion.py
+│   ├── test_representacion.py
+│   └── test_metricas.py
 │
 ├── datos/
 │   └── archivos CSV mensuales del ECU 911
@@ -938,7 +1001,7 @@ Grupo10_P2/
 
 ## 22. Instalación
 
-Se recomienda utilizar un entorno virtual.
+Versión de Python probada: **3.14.3** (también verificado en 3.13.14). Se recomienda utilizar un entorno virtual.
 
 ### Windows
 
@@ -988,8 +1051,8 @@ python -m pytest tests/ -q
 Resultado de la versión final:
 
 ```text
-..................................... [100%]
-37 passed
+............................................ [100%]
+44 passed
 ```
 
 ### Paso 3 — Ejecutar el notebook
@@ -1028,12 +1091,14 @@ streamlit run app.py
 
 ## 24. Pruebas automáticas
 
-El proyecto contiene **37 pruebas automáticas**:
+El proyecto contiene **44 pruebas automáticas**:
 
 ```text
-7  pruebas del criterio Gini
-12 pruebas del pipeline
+8  pruebas del criterio Gini y del bosque (incluye determinismo por semilla)
+16 pruebas del pipeline (incluye 4 pruebas de inyección de fuga temporal
+   y de ParticionadorTemporal, agregadas en la auditoría del 16 de agosto)
 18 pruebas de representación parroquia × día
+2  pruebas de las métricas de evaluación (EvaluadorMetricas)
 ```
 
 Para ejecutarlas:
@@ -1045,11 +1110,13 @@ python -m pytest tests/ -q
 Resultado final:
 
 ```text
-..................................... [100%]
-37 passed
+............................................ [100%]
+44 passed
 ```
 
 Las pruebas de representación incluyen regresiones específicas para comprobar el tratamiento correcto de semanas incompletas.
+
+Las 4 pruebas de fuga temporal agregadas en la auditoría del 16 de agosto (`tests/test_pipeline.py`) verifican por inyección, no solo por inspección, que corromper deliberadamente las semanas de validación/prueba/futuro no altera ni los bordes de discretización, ni los umbrales de la etiqueta, ni las características de ninguna fila cuya semana sea anterior; y que `ParticionadorTemporal` no produce solapamiento entre conjuntos ni deja ninguna de las primeras `BURN_IN` semanas como objetivo supervisado.
 
 ---
 
@@ -1165,7 +1232,7 @@ La versión final integra:
 - probabilidades y calibración;
 - predicción de la semana siguiente;
 - interfaz Streamlit;
-- **37 pruebas automatizadas**.
+- **44 pruebas automatizadas**, incluyendo pruebas de inyección de fuga temporal.
 
 ---
 
@@ -1201,7 +1268,7 @@ Referencia:
 sklearn RF      : 0.7807
 
 Semana objetivo : 2025-12-29
-Pruebas         : 37/37
+Pruebas         : 44/44
 ```
 
 **Horizonte de predicción:** una semana.  

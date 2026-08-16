@@ -14,8 +14,8 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.caracteristicas import (GeneradorCaracteristicas, ConstructorEtiquetas,
-                                 mascara_elegibilidad, indices_de_semanas,
-                                 filtrar_elegibles)
+                                 ParticionadorTemporal, mascara_elegibilidad,
+                                 indices_de_semanas, filtrar_elegibles, BURN_IN)
 
 
 def _tensor_exacto(G, T, S, props=(0.85, 0.05, 0.10), semilla=0):
@@ -270,6 +270,116 @@ def test_elegibilidad_unidad_dia_es_mas_estricta():
     print(f"  OK nivel 'unidad' deja {m_unidad.sum()} y 'unidad_dia' deja {m_cf.sum()}")
 
 
+# --- Auditoria 16-ago: pruebas de inyeccion de fuga temporal ----------------
+# Complementan test_semana_futura_no_depende_del_valor_desconocido, que solo
+# verifica la fila s=S. Aqui se corrompe un BLOQUE completo de semanas fuera
+# de entrenamiento y se compara TODO el pasado, no solo la ultima fila.
+
+def test_perturbar_semanas_futuras_no_altera_X_de_semanas_pasadas():
+    """Corromper val/test/futuro no debe cambiar ni una celda de X del pasado."""
+    rng = np.random.default_rng(3)
+    G, T, S = 4, 5, 40
+    c = rng.integers(0, 10, (G, T, S)).astype(np.int32)
+    meta = _meta(G, T, S)
+    sem_train = np.arange(12, 25)
+    s_cut = int(sem_train.max()) + 1     # primera semana fuera de entrenamiento
+
+    gc1 = GeneradorCaracteristicas()
+    X1, _ = gc1.construirX(c, meta, sem_train, semanas_futuras=1)
+    St = gc1.S_total
+
+    c2 = c.copy()
+    c2[:, :, s_cut:] = 9999              # valor imposible en val/test/futuro
+    gc2 = GeneradorCaracteristicas()
+    X2, _ = gc2.construirX(c2, meta, sem_train, semanas_futuras=1)
+
+    s_idx = np.arange(X1.shape[0]) % St
+    antes = s_idx < s_cut
+    assert (X1[antes] == X2[antes]).all(), "corromper el futuro altero X del pasado"
+    # control: la corrupcion SI debe notarse en las filas de esas semanas,
+    # para que la prueba anterior no sea trivialmente verdadera
+    assert (X1[~antes] != X2[~antes]).any(), "la corrupcion no tuvo ningun efecto"
+    print(f"  OK {int(antes.sum())} filas con s < {s_cut} identicas tras "
+          "corromper el futuro")
+
+
+def test_bordes_de_discretizacion_ignoran_val_test():
+    """
+    Los bordes de cuantiles se ajustan solo con `sel = mask_train & mask_elegible`
+    (caracteristicas.py:construirX). Corromper semanas fuera de entrenamiento no
+    debe mover ningun borde; corromper una semana DENTRO de entrenamiento si debe
+    (control negativo, para que la prueba no sea trivialmente verdadera).
+    """
+    rng = np.random.default_rng(3)
+    G, T, S = 4, 5, 40
+    c = rng.integers(0, 10, (G, T, S)).astype(np.int32)
+    meta = _meta(G, T, S)
+    sem_train = np.arange(12, 25)
+    s_cut = int(sem_train.max()) + 1
+    mask = np.ones((G, T), dtype=bool)
+
+    gc_base = GeneradorCaracteristicas()
+    gc_base.construirX(c, meta, sem_train, semanas_futuras=1, mask_elegible=mask)
+
+    c_fuera = c.copy(); c_fuera[:, :, s_cut:] = 7777
+    gc_fuera = GeneradorCaracteristicas()
+    gc_fuera.construirX(c_fuera, meta, sem_train, semanas_futuras=1, mask_elegible=mask)
+    assert all(np.array_equal(a, b) for a, b in zip(gc_base.bordes, gc_fuera.bordes)), \
+        "corromper val/test/futuro movio los bordes de discretizacion"
+
+    c_dentro = c.copy(); c_dentro[:, :, sem_train[len(sem_train) // 2]] = 7777
+    gc_dentro = GeneradorCaracteristicas()
+    gc_dentro.construirX(c_dentro, meta, sem_train, semanas_futuras=1, mask_elegible=mask)
+    assert not all(np.array_equal(a, b) for a, b in zip(gc_base.bordes, gc_dentro.bordes)), \
+        "corromper una semana de TRAIN no cambio los bordes: la prueba no discrimina"
+    print("  OK bordes ignoran val/test/futuro y si reaccionan a cambios en train")
+
+
+def test_umbrales_de_etiqueta_ignoran_val_test():
+    """P60/P90 se ajustan solo con `semanas_train` (ConstructorEtiquetas.ajustarUmbrales)."""
+    rng = np.random.default_rng(3)
+    G, T, S = 4, 5, 40
+    c = rng.integers(0, 10, (G, T, S)).astype(np.int32)
+    sem_train = np.arange(12, 25)
+    s_cut = int(sem_train.max()) + 1
+    mask = np.ones((G, T), dtype=bool)
+
+    ce1 = ConstructorEtiquetas(60, 90, modo="auto")
+    p60_1, p90_1 = ce1.ajustarUmbrales(c, sem_train, mask_elegible=mask)
+
+    c_fuera = c.copy(); c_fuera[:, :, s_cut:] = 7777
+    ce2 = ConstructorEtiquetas(60, 90, modo="auto")
+    p60_2, p90_2 = ce2.ajustarUmbrales(c_fuera, sem_train, mask_elegible=mask)
+    assert (p60_1, p90_1) == (p60_2, p90_2), \
+        f"los umbrales cambiaron al corromper val/test: ({p60_1},{p90_1}) -> ({p60_2},{p90_2})"
+    print(f"  OK umbrales P60={p60_1} P90={p90_1} identicos tras corromper val/test/futuro")
+
+
+# --- Auditoria 16-ago: ParticionadorTemporal --------------------------------
+
+def test_particion_temporal_sin_solapamiento_y_respeta_burn_in():
+    """
+    Las tres garantias de ParticionadorTemporal que ningun test cubria: sin
+    solapamiento entre conjuntos, orden cronologico estricto, y las primeras
+    BURN_IN semanas excluidas de los tres conjuntos.
+    """
+    S = 100
+    fechas = [pd.Timestamp("2021-07-05") + pd.Timedelta(weeks=i) for i in range(S)]
+    meta = {"fecha_semana": fechas, "S": S}
+    part = ParticionadorTemporal(corte_train=fechas[59], corte_val=fechas[79])
+    tr, va, te = part.dividir(meta)
+
+    assert set(tr) & set(va) == set(), "train y val se solapan"
+    assert set(va) & set(te) == set(), "val y test se solapan"
+    assert set(tr) & set(te) == set(), "train y test se solapan"
+    assert tr.max() < va.min(), "train no termina antes de que empiece val"
+    assert va.max() < te.min(), "val no termina antes de que empiece test"
+    assert not (set(range(BURN_IN)) & (set(tr) | set(va) | set(te))), \
+        "alguna de las primeras BURN_IN semanas quedo como objetivo supervisado"
+    print(f"  OK train/val/test sin solapamiento, orden estricto, "
+          f"burn-in ({BURN_IN} semanas) excluido de los tres")
+
+
 if __name__ == "__main__":
     pruebas = [
         ("Fallo 1 - prediccion de la semana siguiente",
@@ -287,6 +397,11 @@ if __name__ == "__main__":
         ("Fallo 4 - elegibilidad de unidades sin historial",
          [test_elegibilidad_excluye_unidades_que_aparecen_despues_del_entrenamiento,
           test_elegibilidad_unidad_dia_es_mas_estricta]),
+        ("Auditoria 16-ago - fuga temporal por inyeccion y particion",
+         [test_perturbar_semanas_futuras_no_altera_X_de_semanas_pasadas,
+          test_bordes_de_discretizacion_ignoran_val_test,
+          test_umbrales_de_etiqueta_ignoran_val_test,
+          test_particion_temporal_sin_solapamiento_y_respeta_burn_in]),
     ]
     import io
     import contextlib

@@ -1,5 +1,8 @@
-numpy
-pandas
+# Version de Python probada: 3.14.3 (tambien verificado en 3.13.14).
+# numpy/pandas fijados porque determinan los resultados numericos del pipeline;
+# el resto se deja flexible.
+numpy==2.5.2
+pandas==3.0.5
 matplotlib
 scikit-learn
 joblib

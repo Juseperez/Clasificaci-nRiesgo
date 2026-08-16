@@ -106,10 +106,35 @@ def test_probabilidades_suman_uno():
     print("  OK f(x) entrega un vector de probabilidad valido (suma 1, no negativo)")
 
 
+# --- Auditoria 16-ago: reproducibilidad por semilla -------------------------
+def test_misma_semilla_produce_el_mismo_bosque():
+    """
+    Dos bosques con semilla=42 sobre los mismos datos deben predecir exactamente
+    igual: mismo bootstrap por arbol, mismos atributos candidatos por nodo,
+    mismos cortes. Es la garantia detras de que la corrida de Windows 10 y la de
+    Windows 11 dieran el mismo F1 macro (0.7822) bit a bit.
+    """
+    rng = np.random.default_rng(5)
+    Xb = rng.integers(0, 32, size=(600, 6)).astype(np.uint8)
+    y = rng.integers(0, 3, size=600).astype(np.uint8)
+    Xte = rng.integers(0, 32, size=(100, 6)).astype(np.uint8)
+
+    b1 = BosqueAleatorioPropio(nArboles=5, profundidadMax=6, semilla=42,
+                               verboso=False).entrenar(Xb, y)
+    b2 = BosqueAleatorioPropio(nArboles=5, profundidadMax=6, semilla=42,
+                               verboso=False).entrenar(Xb, y)
+
+    assert np.array_equal(b1.predecir(Xte), b2.predecir(Xte))
+    assert np.allclose(b1.predecirProba(Xte), b2.predecirProba(Xte), atol=0)
+    print("  OK misma semilla -> predicciones y probabilidades identicas "
+          "(bit a bit) en dos entrenamientos independientes")
+
+
 if __name__ == "__main__":
     print("Pruebas del criterio de division (casos resueltos a mano):")
     for f in [test_pesos_de_clase, test_gini_nodo, test_gini_hijos,
               test_mejor_corte_encuentra_la_separacion, test_nodo_puro_no_se_divide,
-              test_arbol_separable_es_perfecto, test_probabilidades_suman_uno]:
+              test_arbol_separable_es_perfecto, test_probabilidades_suman_uno,
+              test_misma_semilla_produce_el_mismo_bosque]:
         f()
     print("\nTodas las pruebas pasaron.")
