@@ -20,7 +20,6 @@ UC3 escenario alternativo : parroquia sin incidentes historicos, que se muestra
 import json
 import os
 
-import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -59,17 +58,42 @@ def _texto_unidad(met):
     return f"{esp} x {tmp}"
 
 
+def _texto_umbrales(met):
+    """
+    Frase corta con los umbrales de la etiqueta, leidos en vivo de metricas.json
+    (nunca hardcodeados). Solo cubre el caso de umbral global (un numero para
+    las seis parroquias); si el modo fue 'por_dia' (un umbral por dia), se deja
+    en None y el detalle completo sigue disponible en la pestaña de metricas.
+    """
+    e = (met or {}).get("etiqueta", {})
+    ub, ua = e.get("umbral_bajo"), e.get("umbral_alto")
+    if isinstance(ub, list) or isinstance(ua, list) or ub is None or ua is None:
+        return None
+    ub, ua = float(ub), float(ua)
+    medio_desde = ub + 1 if ub == int(ub) else ub
+    fmt = lambda x: f"{int(x)}" if x == int(x) else f"{x:g}"
+    return (f"Bajo = hasta {fmt(ub)} incidentes/dia  ·  "
+            f"Medio = de {fmt(medio_desde)} a {fmt(ua)}  ·  "
+            f"Alto = mas de {fmt(ua)}")
+
+
 df, met = cargar()
 
 st.title("Clasificacion del nivel de riesgo de emergencias de transito")
-st.caption(f"Canton Guayaquil - {_texto_unidad(met)} - datos historicos del "
-           "SIS ECU 911. Grupo #10, CCPG1044.")
+st.caption(f"Canton Guayaquil - {_texto_unidad(met)} - modelo entrenado con "
+           "datos historicos del SIS ECU 911. Grupo #10, CCPG1044.")
 
 if df is None:
     st.error("No se encontro `salidas/matriz_riesgo.parquet` ni "
              "`salidas/matriz_riesgo.csv`. Corre primero el notebook "
              "`proyecto.ipynb` para generar la matriz de riesgo.")
     st.stop()
+
+st.info(
+    f"**Esto es una prediccion, no un registro observado.** El modelo estima "
+    f"el nivel de riesgo de la semana objetivo **{df['semana_objetivo'].iloc[0]}** "
+    "a partir del historial de semanas anteriores; ningun incidente de esa "
+    "semana fue observado todavia.")
 
 # ---------------------------------------------------------------- filtros ---
 st.sidebar.header("Filtros")
@@ -87,11 +111,17 @@ st.sidebar.info(
     "La probabilidad mostrada es **la probabilidad de la clase predicha**, es "
     "decir la confianza del clasificador en el nivel asignado. No es la "
     "probabilidad de que ocurra una emergencia.")
+_alcance = (met or {}).get("alcance", {})
+_excluidas = _alcance.get("unidades_excluidas_sin_historial")
+_texto_alcance = (f" En esta corrida, {_excluidas} de {_alcance.get('G_total', '?')} "
+                  "parroquias quedaron en esa situacion."
+                  if _excluidas is not None else "")
 st.sidebar.warning(
-    "Las parroquias en gris no tienen incidentes historicos en la ventana de "
-    "entrenamiento. No pasan por el modelo y su riesgo **no esta estimado**: la "
-    "ausencia de registros puede deberse a falta de cobertura y no equivale a "
-    "riesgo bajo.")
+    "\"Sin datos suficientes\" corresponde a una unidad que no cumple las "
+    "condiciones historicas necesarias para generar una prediccion (no tuvo "
+    "incidentes registrados durante la ventana de entrenamiento). No pasa por "
+    "el modelo y su riesgo **no esta estimado**: la ausencia de registros puede "
+    "deberse a falta de cobertura y no equivale a riesgo bajo." + _texto_alcance)
 st.sidebar.caption(
     "El dataset abierto del ECU 911 publica la ubicacion hasta parroquia y la "
     "fecha a nivel de dia, sin coordenadas ni hora. Por eso la unidad de "
@@ -119,6 +149,31 @@ with tab_mapa:
         st.warning("Ningun resultado con los filtros actuales.")
     else:
         st.subheader("Nivel de riesgo por parroquia y dia de la semana")
+        _umbrales_txt = _texto_umbrales(met)
+        if _umbrales_txt:
+            st.caption(f"Umbrales de la etiqueta (fijos para las seis "
+                       f"parroquias): {_umbrales_txt}.")
+        with st.expander(
+            "Por que el riesgo Alto aparece casi siempre en Guayaquil"):
+            st.markdown(
+                "El umbral que separa Medio de Alto es un **numero absoluto de "
+                "incidentes por dia**, igual para las seis parroquias, no un "
+                "porcentaje relativo a cada una.\n\n"
+                "El maximo diario observado en el historico de entrenamiento "
+                "fue:\n\n"
+                "- Guayaquil, cabecera cantonal: **450**\n"
+                "- Progreso: **9**\n"
+                "- Morro: **4**\n"
+                "- Posorja: **6**\n"
+                "- Puna: **1**\n"
+                "- Tenguel: **5**\n\n"
+                "Con un umbral compartido, ninguna parroquia fuera de la "
+                "cabecera puede llegar a clasificarse como Alto: no es una "
+                "limitacion del clasificador, es una consecuencia de la escala "
+                "de incidentes de cada parroquia frente a un umbral absoluto. "
+                "Que el modelo prediga Alto casi solo en Guayaquil no es, por "
+                "si solo, evidencia de que el modelo \"aprendio mal\": es lo "
+                "que la propia definicion de la etiqueta permite.")
         dias_vis = [x for x in DIAS if x in sel_d]
         niveles = d.pivot_table(index="unidad", columns="dia_semana",
                                 values="nivel", aggfunc="first")
@@ -236,9 +291,31 @@ with tab_metricas:
             st.subheader("Desempeno por parroquia")
             st.caption("La cabecera cantonal concentra la mayor parte de los "
                        "eventos: esta tabla muestra si el desempeno agregado se "
-                       "sostiene unidad por unidad. Leer el F1 macro junto con n "
-                       "y la distribucion de clases.")
-            st.dataframe(pd.DataFrame(met["por_unidad"]), use_container_width=True)
+                       "sostiene unidad por unidad.")
+            st.warning(
+                "Cuando `clases_presentes` es menor a 3, el F1 macro de esa fila "
+                "**no es comparable** con una evaluacion de las tres clases: el "
+                "promedio incluye tambien las clases ausentes, que aportan F1=0. "
+                "Guayaquil suele caer en este caso porque casi todas sus "
+                "observaciones de prueba son Alto; su `exactitud` sigue siendo "
+                "la lectura correcta de que acerto en la practica totalidad de "
+                "sus predicciones. Para interpretar cada fila, leer `exactitud` "
+                "y `dist_bajo_medio_alto` junto con `clases_presentes`, no el "
+                "F1 macro de forma aislada. Las filas con menos de 3 clases "
+                "quedan resaltadas abajo.")
+            df_unidad = pd.DataFrame(met["por_unidad"])
+            if "clases_presentes" in df_unidad.columns:
+                def _resaltar_pocas_clases(fila):
+                    if fila.get("clases_presentes", 3) < 3:
+                        # Fondo y texto fijados juntos: sin `color` explicito el
+                        # tema oscuro de Streamlit hereda letra clara y el texto
+                        # queda invisible sobre este fondo claro.
+                        return ["background-color: #fff3cd; color: #000000"] * len(fila)
+                    return [""] * len(fila)
+                st.dataframe(df_unidad.style.apply(_resaltar_pocas_clases, axis=1),
+                             use_container_width=True)
+            else:
+                st.dataframe(df_unidad, use_container_width=True)
 
         if "importancias" in met:
             st.subheader("Importancia de variables del bosque propio")
