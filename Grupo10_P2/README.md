@@ -1,296 +1,626 @@
 # Grupo10_P2 — Clasificación del nivel de riesgo de emergencias de tránsito en el cantón Guayaquil
 
-CCPG1044 Inteligencia Artificial · ESPOL · Grupo #10 · Paralelo P2
+**CCPG1044 Inteligencia Artificial · ESPOL · Grupo #10 · Paralelo P2**
 
-Bohórquez Villao Andrés Martín · Pérez Zamora Juan Sebastián · Ullaguari Cagua John Jairo
+**Integrantes:**
+
+- Bohórquez Villao Andrés Martín
+- Pérez Zamora Juan Sebastián
+- Ullaguari Cagua John Jairo
 
 ---
 
-## Estado del proyecto
+## 1. Descripción del proyecto
 
-**Implementación completa y probada; pendiente la corrida final con datos continuos.**
+El proyecto desarrolla un sistema de Machine Learning para clasificar el nivel de riesgo de emergencias de tránsito en el cantón Guayaquil utilizando datos históricos abiertos del Servicio Integrado de Seguridad ECU 911.
 
-**Verificable desde este paquete**, sin datos ni ejecución previa:
+La salida del sistema corresponde a tres niveles de riesgo:
 
-- 35 pruebas automáticas pasan (7 + 12 + 16 en `tests/`).
-- Los 12 módulos `.py` compilan y el notebook (33 celdas, 20 de código) tiene sintaxis válida.
-- El notebook viene sin salidas guardadas y `salidas/` está vacío: no hay ningún
-  resultado que pueda confundirse con una medición real.
+- **Bajo**
+- **Medio**
+- **Alto**
 
-**Verificado durante el desarrollo, pero no reproducible desde este paquete**
-hasta incorporar los datos continuos y ejecutar el notebook:
+La predicción se realiza para cada combinación de **parroquia × día de la semana** de la semana siguiente.
 
-- La interfaz Streamlit inicia y renderiza correctamente cuando dispone de
-  `salidas/matriz_riesgo` y `salidas/metricas.json`.
-- El pipeline completo se ejecuta de punta a punta con CSV reales del ECU 911.
-  Esa corrida usó tres meses **no contiguos** y parámetros reducidos, así que
-  demuestra que el código funciona, no produce resultados reportables.
+El clasificador principal es un **Random Forest implementado desde cero en NumPy**, incluyendo:
 
-**Pendiente:** `datos/` está vacío. No hay ninguna métrica final, ni matriz de
-riesgo definitiva, ni notebook ejecutado con salidas.
+- árboles CART;
+- criterio de impureza Gini ponderada;
+- selección aleatoria de atributos;
+- bootstrap;
+- agregación de probabilidades;
+- clasificación multiclase.
 
-Ninguna métrica de desempeño de este proyecto es válida hasta ejecutar el
-notebook con los meses continuos de julio 2021 a diciembre 2025.
+`scikit-learn` se utiliza únicamente como referencia experimental y no como parte de la solución principal.
 
-## Re-especificación de la representación
+---
 
-En los avances anteriores se asumió, a partir de la descripción inicial de la
-fuente, que los recursos mensuales del ECU 911 incluían coordenadas y hora del
-incidente. Durante la implementación se verificó directamente la estructura de
-los archivos de distintos años y se determinó que la publicación abierta contiene
-exactamente siete columnas:
+## 2. Estado final
 
+**Proyecto implementado, ejecutado y probado con datos reales continuos de julio de 2021 a diciembre de 2025.**
+
+Resultados verificados:
+
+- **35/35 pruebas automáticas superadas**.
+- Pipeline ejecutado de punta a punta.
+- Notebook ejecutado y guardado con salidas.
+- Modelo final entrenado.
+- Matriz de riesgo de la semana siguiente generada.
+- Interfaz gráfica Streamlit validada.
+- Resultados y artefactos almacenados en `salidas/`.
+
+La ejecución final se realizó el **16 de agosto de 2026** sobre:
+
+- Windows 10
+- Python 3.13.14
+- 4 CPU
+- NumPy 2.5.2
+- pandas 3.0.5
+
+---
+
+## 3. Representación final del problema
+
+Durante los avances iniciales se asumió que la fuente abierta del ECU 911 contenía coordenadas y hora de cada incidente.
+
+La inspección directa de los archivos mensuales mostró que la publicación disponible contiene siete columnas:
+
+```text
+Fecha
+provincia
+Canton
+Cod_Parroquia
+Parroquia
+Servicio
+Subtipo
 ```
-Fecha ; provincia ; Canton ; Cod_Parroquia ; Parroquia ; Servicio ; Subtipo
-```
 
-Es decir, ubicación administrativa hasta parroquia y fecha a nivel de día, pero
-**no coordenadas ni hora**. La celda de 1 km × 1 km y la franja de tres horas son
-inconstruibles con esta fuente. La representación se ajustó a la máxima
-granularidad verificable:
+La fuente proporciona ubicación administrativa hasta parroquia y fecha a nivel de día, pero **no contiene coordenadas geográficas ni hora del incidente**.
 
-| | Tareas #3 y #4 | Versión final |
+Por esta razón, la representación inicial fue ajustada a la máxima granularidad soportada por los datos.
+
+| Elemento | Diseño inicial | Representación final |
 |---|---|---|
-| Unidad espacial | celda de 1 km × 1 km (UTM 17S) | **parroquia** (`Cod_Parroquia`) |
-| Unidad temporal | franja de 3 h, \|T\| = 56 | **día de la semana, \|T\| = 7** |
-| Horizonte | una semana | una semana (sin cambio) |
-| Alcance | cantón Guayaquil, tránsito | cantón Guayaquil, tránsito (sin cambio) |
+| Unidad espacial | Celda 1 km × 1 km | **Parroquia (`Cod_Parroquia`)** |
+| Unidad temporal | Franja de 3 horas, \|T\| = 56 | **Día de la semana, \|T\| = 7** |
+| Horizonte | Una semana | **Una semana** |
+| Alcance | Cantón Guayaquil, tránsito | **Cantón Guayaquil, tránsito** |
 
-Todo lo demás se conserva: instancia (parroquia, día, semana), etiqueta por
-percentiles ajustados solo con entrenamiento, partición temporal, bosque
-aleatorio propio en NumPy, tres componentes y tres casos de uso.
+La instancia de aprendizaje final es:
 
-**Limitación que hay que declarar en el reporte:** dentro del cantón Guayaquil el
-dataset distingue 6 parroquias, y la cabecera cantonal concentra alrededor del
-98.7 % de los eventos de tránsito. La resolución espacial que ofrece la fuente
-abierta es por tanto limitada, y las métricas deben reportarse también por
-unidad, no solo agregadas. El `Preprocesador` lo advierte automáticamente cuando
-una unidad supera el 90 %.
-
-## Estructura
-
-```
-00_inspeccionar_csv.py   Paso 0: qué traen realmente los CSV del portal
-proyecto.ipynb           Notebook principal (entregable a)
-app.py                   Interfaz gráfica Streamlit (entregable c)
-src/preprocesamiento.py  Componente 1 — UC1: CSV crudos -> tensor c[g,t,s]
-src/caracteristicas.py   Partición temporal, elegibilidad, etiqueta, matriz X
-src/bosque.py            Componente 2 — bosque aleatorio propio (NumPy)
-src/metricas.py          Métricas y los tres baselines
-src/riesgo.py            Componente 3 — matriz de riesgo parroquia × día
-tests/test_gini.py       Verificación del criterio de división (7 pruebas)
-tests/test_pipeline.py   Regresión del pipeline (12 pruebas)
-tests/test_representacion.py  Semántica parroquia × día (16 pruebas)
-datos/                   CSV descargados manualmente del portal
-salidas/                 Artefactos que consume la interfaz
+```text
+(parroquia, día de la semana, semana)
 ```
 
-## Cómo correrlo
+---
 
-```bash
-pip install numpy pandas matplotlib scikit-learn joblib streamlit
-# opcionales: xgboost pyarrow
+## 4. Partición temporal
 
-python 00_inspeccionar_csv.py datos/     # 1. confirmar las columnas reales
-python -m tests.test_gini                # 2. criterio de división
-python -m tests.test_pipeline            # 3. pipeline
-python -m tests.test_representacion      # 4. representación parroquia × día
-jupyter notebook proyecto.ipynb          # 5. ejecutar y GUARDAR CON SALIDAS
-streamlit run app.py                     # 6. interfaz gráfica
+La evaluación mantiene una separación estrictamente temporal:
+
+| Conjunto | Periodo |
+|---|---|
+| Entrenamiento | julio 2021 – diciembre 2024 |
+| Validación | enero 2025 – junio 2025 |
+| Prueba | julio 2025 – diciembre 2025 |
+
+Número de instancias:
+
+```text
+Train: 7,224
+Validación: 1,092
+Test: 1,092
 ```
 
-No hacen falta pyproj, GeoPandas ni Folium: al no haber coordenadas no hay
-geometría que proyectar ni que dibujar.
+No se realiza mezcla aleatoria entre periodos, evitando fuga de información futura.
 
-## El modelo
+---
 
-Bosque aleatorio de árboles de decisión **implementado desde cero en NumPy**
-(`src/bosque.py`), siguiendo CART (Breiman et al., 1984) y Random Forests
-(Breiman, 2001). NumPy se usa solo como librería de álgebra matricial: la
-inducción del árbol, la impureza de Gini ponderada, el muestreo bootstrap y la
-agregación de probabilidades están escritos en el proyecto.
+## 5. Preprocesamiento
 
-`scikit-learn` y `XGBoost` aparecen únicamente en una celda del notebook marcada
-como benchmark externo, y no participan de la solución.
+El módulo `src/preprocesamiento.py`:
 
-Decisiones que mantienen tratable la implementación propia:
+1. carga los archivos mensuales del ECU 911;
+2. detecta las columnas disponibles;
+3. filtra la categoría `Tránsito y Movilidad`;
+4. filtra el cantón `GUAYAQUIL`;
+5. valida fechas y unidades espaciales;
+6. asigna parroquia y día de la semana;
+7. agrega los incidentes para formar la serie temporal.
 
-- `X` se guarda discretizada en `uint8` (bins por cuantiles ajustados solo con
-  filas elegibles de entrenamiento).
-- La búsqueda del mejor corte acumula un histograma de peso por (bin, clase) con
-  `np.bincount` en lugar de ordenar: O(\|Q\|) por nodo.
-- Cada árbol se entrena sobre una submuestra bootstrap acotada por
-  `maxMuestrasPorArbol`, **no** sobre el conjunto completo. Hay que reportarlo
-  así y no como "N árboles entrenados sobre n instancias".
+Para reducir el consumo de memoria, cada archivo mensual es **filtrado antes de ser incorporado al conjunto consolidado**.
 
-Los tiempos y la memoria se miden en la corrida real y quedan en
-`salidas/metricas.json`, junto con el entorno de ejecución.
+Esto evita mantener simultáneamente en RAM millones de registros nacionales que no pertenecen al alcance del proyecto.
 
-## Características (11 variables)
+---
 
-```
-dia_semana  es_fin_de_semana  mes  es_feriado
-rezago_1  rezago_2  rezago_3  rezago_4
-media_movil_4  media_movil_12
+## 6. Características
+
+El modelo utiliza **11 variables predictoras**:
+
+```text
+dia_semana
+es_fin_de_semana
+mes
+es_feriado
+rezago_1
+rezago_2
+rezago_3
+rezago_4
+media_movil_4
+media_movil_12
 densidad_historica_parroquia
 ```
 
-Todas usan información estrictamente anterior a la semana `s`.
+Todas las características utilizan exclusivamente información disponible **antes de la semana a predecir**.
 
-**No hay características de vecindad.** Sin coordenadas no existe una relación de
-adyacencia defendible entre parroquias: Puná es una isla y Tenguel está al
-extremo sur, y ambas pertenecen al mismo cantón que la cabecera. Se prescinde de
-la vecindad en lugar de fabricar una proximidad que no se puede sostener.
+### Feriados
 
-`mes` y `es_feriado` se calculan sobre la **fecha exacta** de cada par (día,
-semana), no sobre la fecha del lunes replicada a los siete días.
+`es_feriado` considera:
 
-**Redacción exacta para el reporte sobre `es_feriado`:** indicador de feriados
-nacionales de fecha fija y de feriados móviles derivados de Pascua (Carnaval
-lunes y martes, Viernes Santo); **no incorpora traslados de días de descanso**,
-que dependen de decretos anuales. No describirlo como "calendario oficial
-completo".
+- feriados nacionales de fecha fija;
+- lunes y martes de Carnaval;
+- Viernes Santo.
 
-## La etiqueta
+No incorpora traslados extraordinarios de días de descanso establecidos mediante decretos anuales.
 
+### Vecindad espacial
+
+No se utilizan características de vecinos.
+
+La fuente no proporciona coordenadas, por lo que no existe una relación geométrica verificable entre parroquias que permita construir una vecindad espacial sin introducir supuestos artificiales.
+
+---
+
+## 7. Construcción de la etiqueta
+
+La variable objetivo representa el conteo de emergencias de cada combinación parroquia–día.
+
+La clasificación final utiliza:
+
+```text
+Bajo  : c <= P60
+Medio : P60 < c <= P90
+Alto  : c > P90
 ```
-y = 0 (bajo)  si c <= u_bajo
-    1 (medio) si u_bajo < c <= u_alto
-    2 (alto)  si c > u_alto
+
+Los percentiles se calculan **únicamente con datos de entrenamiento**.
+
+En la ejecución final se utilizó directamente el modo:
+
+```text
+global
 ```
 
-Umbrales ajustados **solo con la ventana de entrenamiento**. Como el conteo es
-una variable discreta, `ConstructorEtiquetas` recorre una escalera y declara en
-qué peldaño se detuvo:
+con:
 
-| Peldaño | Qué hace | ¿Sigue siendo un percentil? |
-|---|---|---|
-| `global` | P60/P90 sobre todos los conteos de entrenamiento | Sí |
-| `positivos` | P60/P90 sobre los conteos > 0 | Sí |
-| `por_dia` | P60/P90 calculados por día de la semana | Sí |
-| `discreto` | cortes enteros forzados sobre la ECDF | **No** |
+```text
+P60 = 0
+P90 = 121
+```
 
-Criterios de aceptación de un peldaño: las tres clases con masa suficiente y, en
-`por_dia`, que ningún día pierda individualmente su clase media (si un día tiene
-P60 = P90, dentro de él la clase media desaparece y todo `c ≥ 1` salta a "alto").
+Distribución de clases en entrenamiento:
 
-**Que la clase alta salga más frecuente que la media NO invalida el etiquetado.**
-En una variable discreta puede ocurrir con los percentiles correctos: con 85 % de
-ceros, 5 % de unos y 10 % de doses, `np.percentile` da P60 = 0 y P90 = 1.1 y las
-clases quedan 85/5/10; "alto" sigue siendo exactamente el extremo superior. Se
-reporta como diagnóstico, no como error.
+| Clase | Proporción |
+|---|---:|
+| Bajo | 63.690 % |
+| Medio | 26.398 % |
+| Alto | 9.911 % |
 
-Del mismo modo, `corresponde_a_percentiles` es **por construcción** (`True` para
-los tres primeros peldaños, `False` solo para `discreto`) y no se deduce de la
-masa acumulada `F(u)`: el cuantil de una discreta es una función escalón, así que
-con 85 % de ceros el valor 0 es a la vez el percentil 60, el 70 y el 80.
+No fue necesario recurrir a los mecanismos alternativos de etiquetado.
 
-Si la corrida real llega a `discreto`, el reporte no puede seguir hablando de
-"P60 y P90": hay que declarar la regla efectivamente usada y las proporciones
-resultantes.
+---
 
-## Desempeño por parroquia
+## 8. Modelo Random Forest propio
 
-Como la cabecera cantonal concentra alrededor del 98.7 % de los eventos, un buen
-F1 macro agregado podría deberse solo a ella. El notebook produce una tabla de
-desempeño unidad por unidad (sección 2.6) con el número de instancias, la
-distribución de clases y las métricas de cada parroquia, y la guarda en
-`salidas/metricas.json` bajo `por_unidad`; la interfaz la muestra en la pestaña
-de métricas.
+El clasificador fue desarrollado desde cero en `src/bosque.py` utilizando NumPy.
 
-En parroquias con pocas instancias, o donde alguna clase no aparece en el
-conjunto de prueba, el F1 macro aislado es inestable y no debe leerse igual que
-el de la cabecera. Por eso la tabla incluye `n` y `clases_presentes`, y el
-notebook avisa cuando alguna unidad no tiene las tres clases. Esta tabla es la
-respuesta directa a la pregunta "¿el buen rendimiento agregado es solo porque
-Guayaquil cabecera domina los datos?".
+La implementación incluye:
 
-## Elegibilidad
+- nodos CART;
+- divisiones mediante Gini ponderado;
+- selección aleatoria de atributos;
+- muestras bootstrap;
+- pesos de clase;
+- predicción de probabilidades;
+- combinación de árboles por promedio de probabilidades.
 
-Las unidades sin incidentes en la ventana de entrenamiento **no ingresan al
-modelo**: se excluyen de `X_train`, `X_val` y `X_test`, no solo del mapa, y en la
-interfaz se muestran en gris como "sin datos suficientes" (riesgo no estimado),
-porque la ausencia de registros puede deberse a falta de cobertura y no equivale
-a riesgo bajo.
+### Hiperparámetros finales
 
-`NIVEL_ELEGIBILIDAD = "unidad"` (por defecto) excluye la parroquia completa; es
-la regla literal de la Tarea #4. `"unidad_dia"` es más estricto y elimina también
-días tranquilos de parroquias activas, que sí son información válida de riesgo
-bajo.
+```text
+Número de árboles        : 100
+Profundidad máxima       : 16
+Mínimo muestras por hoja : 5
+Bins                     : 32
+Semilla                  : 42
+Potencia de pesos        : 1.0
+```
 
-Esto también rige en la **predicción de la semana objetivo**:
-`predecir_matriz_semana()` envía al modelo únicamente las filas elegibles y deja
-el resto de la matriz en `NaN`. Predecir las G×T combinaciones y pintar después
-en gris las no elegibles daría el mismo resultado visual, pero haría falsa la
-afirmación de que no pasan por el modelo. Una unidad sin historial no reporta
-nivel ni probabilidad: el clasificador no opina sobre ella.
+Criterio de selección:
 
-## Salvaguarda de cobertura temporal
+```text
+F1 macro en validación
+```
 
-Meses no contiguos dejan semanas enteras vacías que contaminan los rezagos, las
-medias móviles y los percentiles de la etiqueta. El notebook **se detiene** si
-detecta semanas sin ningún evento. Es una salvaguarda de cobertura: dado el
-volumen de tránsito en Guayaquil, una semana completa en cero sería
-extremadamente sospechosa.
+F1 macro obtenido durante la selección:
 
-## Inconsistencia del reporte que hay que resolver (no es código)
+```text
+0.8268
+```
 
-RNF1 de la Tarea #3 dice que la clasificación **debe alcanzar** un F1 macro
-superior al 60 %. La Tarea #4 declara vigentes RF1–RNF4, pero más adelante ya
-dice que el 60 % es una meta *inicial de referencia* y que el criterio principal
-es superar consistentemente los baselines.
+---
 
-Esa revisión quedó escrita el 27 de julio, **antes de tener ningún resultado
-real**: no es un ajuste retroactivo, y hay que decirlo así.
+## 9. Resultados finales
 
-> RNF1 se precisa respecto de la Tarea #3: el F1 macro de 0.60 se conserva como
-> referencia aspiracional proveniente de literatura en contextos distintos,
-> mientras que el criterio experimental principal de éxito es superar de forma
-> consistente los baselines calculados sobre el mismo dataset. Esta precisión
-> quedó establecida durante el diseño (Tarea #4), previamente a la obtención de
-> resultados.
+### Conjunto de prueba
 
-Si el F1 real queda por debajo de 0.60, **no escribir "cumplimos porque cambiamos
-RNF1"**, sino:
+| Modelo | Accuracy | F1 macro | F1 bajo | F1 medio | F1 alto | Recall alto |
+|---|---:|---:|---:|---:|---:|---:|
+| **Bosque propio (NumPy)** | **0.8104** | **0.7783** | 0.8547 | 0.4912 | **0.9889** | **1.0000** |
+| sklearn RandomForest | 0.7985 | 0.7762 | 0.8422 | 0.4977 | 0.9889 | 1.0000 |
+| Persistencia | 0.7491 | 0.7141 | 0.8057 | 0.3478 | 0.9889 | 1.0000 |
+| Moda histórica | 0.7738 | 0.7096 | 0.8639 | 0.4404 | 0.8247 | 0.7135 |
+| Clase mayoritaria | 0.6520 | 0.2631 | 0.7894 | 0.0000 | 0.0000 | 0.0000 |
 
-> El umbral aspiracional original de 0.60 no se alcanzó; sin embargo, la
-> evaluación se realiza también contra los baselines definidos sobre el mismo
-> dataset, criterio establecido durante el diseño.
+El modelo propio obtuvo:
 
-Los requisitos funcionales también se actualizan, no se esconden: RF3 pasa a
-asignar cada registro a su parroquia y día de la semana; RF4 construye la
-etiqueta por parroquia–día; RF5 predice el nivel de cada parroquia–día de la
-semana siguiente; RF6 ofrece filtros por parroquia y día; RF8 exporta las
-combinaciones críticas. La rúbrica del proyecto final exige expresamente
-"nombre y descripción actualizada del problema" y modelos finales, así que este
-es el lugar correcto para hacerlo.
+```text
+Accuracy   = 0.8104
+F1 macro   = 0.7783
+F1 Alto    = 0.9889
+Recall Alto = 1.0000
+Brier      = 0.2888
+```
 
-## Correspondencia con los modelos de la Tarea #4
+El resultado supera la referencia de **F1 macro = 0.60** establecida durante el proyecto y supera los baselines definidos sobre el mismo conjunto de datos.
 
-Las clases conservan los nombres del diagrama de clases de diseño:
-`Preprocesador`, `ParticionadorTemporal`, `ConstructorEtiquetas`,
-`GeneradorCaracteristicas`, `NodoArbol`, `ArbolDecisionPropio`,
-`BosqueAleatorioPropio`, `EvaluadorMetricas`, `MatrizRiesgo`. La interfaz de
-consulta es `app.py`.
+También presenta un desempeño comparable al Random Forest de referencia de `scikit-learn`, obteniendo ligeramente mayor F1 macro:
 
-Diagramas que hay que actualizar en el reporte final: la representación
-computacional (desaparecen UTM y grilla, aparece `Cod_Parroquia`) y el diagrama
-de clases del dominio (`CeldaGeografica` → `Parroquia`, `FranjaHoraria` →
-`DiaSemana`). Casos de uso, escenarios, paquetes, componentes, algoritmo del
-bosque, secuencia y estados quedan prácticamente iguales: cambian etiquetas, no
-estructura.
+```text
+Propio  : 0.7783
+sklearn : 0.7762
+```
 
-## Plan restante
+---
 
-1. Descargar los meses **contiguos** de julio 2021 a diciembre 2025.
-2. Correr `00_inspeccionar_csv.py` y confirmar que las columnas no cambian en
-   ningún mes del periodo.
-3. Ejecutar el notebook completo **y guardarlo con las salidas**.
-4. `streamlit run app.py` y capturas para el reporte.
-5. Escribir las secciones 6, 7 y 8 con los números de `salidas/metricas.json`.
-6. Póster con el template de Canvas y armar `Grupo10_P2.zip`.
+## 10. Importancia de variables
 
-Partición temporal según lo fijado en la Tarea #3, sin cambios: entrenamiento
-julio 2021 – diciembre 2024, validación enero – junio 2025, prueba julio –
-diciembre 2025. Un notebook con `execution_count = None` no acredita ninguna
-medición.
+Las variables con mayor importancia en el bosque propio fueron:
+
+| Variable | Importancia |
+|---|---:|
+| `rezago_1` | 0.1823 |
+| `media_movil_12` | 0.1690 |
+| `densidad_historica_parroquia` | 0.1601 |
+| `media_movil_4` | 0.1461 |
+| `rezago_2` | 0.1315 |
+
+Los resultados indican que el historial reciente y el comportamiento temporal acumulado de cada parroquia aportan más información al clasificador que variables de calendario como feriado o fin de semana.
+
+---
+
+## 11. Desempeño por parroquia
+
+La fuente presenta una fuerte concentración espacial de eventos en la cabecera cantonal de Guayaquil.
+
+Por esta razón, además de las métricas agregadas, se evalúa el rendimiento por parroquia.
+
+| Parroquia | n | Distribución Bajo/Medio/Alto | Accuracy |
+|---|---:|---:|---:|
+| Guayaquil, cabecera cantonal | 182 | 4 / 0 / 178 | 0.9780 |
+| Juan Gómez Rendón | 182 | 86 / 96 / 0 | 0.5110 |
+| Morro | 182 | 169 / 13 / 0 | 0.9286 |
+| Posorja | 182 | 133 / 49 / 0 | 0.7253 |
+| Puná | 182 | 177 / 5 / 0 | 0.9725 |
+| Tenguel | 182 | 143 / 39 / 0 | 0.7473 |
+
+La clase **Alto** se concentra principalmente en la cabecera cantonal.
+
+Por ello, el elevado F1 de la clase Alto debe interpretarse junto con la distribución espacial de clases.
+
+La separación entre las clases **Bajo** y **Medio** constituye el problema de clasificación más difícil del conjunto de datos.
+
+---
+
+## 12. Limitaciones de los datos
+
+### Resolución espacial y temporal
+
+La fuente abierta no proporciona:
+
+- coordenadas;
+- dirección georreferenciable;
+- hora del incidente.
+
+Por ello, no es posible construir honestamente una grilla espacial de 1 km × 1 km ni franjas horarias de tres horas.
+
+### Concentración espacial
+
+La cabecera cantonal concentra aproximadamente el **98.9 % de los eventos de tránsito** observados dentro del cantón.
+
+Esto limita la cantidad de ejemplos de riesgo alto disponibles para otras parroquias.
+
+### Anomalía de enero de 2024
+
+Durante la inspección se detectó una anomalía notable en el recurso correspondiente a enero de 2024.
+
+En Guayaquil se encontraron:
+
+```text
+Diciembre 2023 : 4,511 registros de Tránsito y Movilidad
+Enero 2024     :    20 registros de Tránsito y Movilidad
+Febrero 2024   : 4,041 registros de Tránsito y Movilidad
+```
+
+El archivo de enero contiene 208,194 registros nacionales y 40,351 registros de Guayaquil, por lo que no corresponde a un archivo vacío.
+
+A nivel nacional se observaron únicamente 2,634 registros clasificados como `Tránsito y Movilidad`, mientras que 200,318 aparecen como `Seguridad Ciudadana`.
+
+También se verificó que los subtipos de tránsito presentes en febrero no aparecen reclasificados dentro de `Seguridad Ciudadana` en enero.
+
+Al no existir una regla objetiva para reconstruir los registros faltantes, **no se realizaron imputaciones ni reclasificaciones artificiales**. El archivo se conserva tal como fue publicado y la situación se documenta como una limitación de calidad de la fuente.
+
+---
+
+## 13. Semana de predicción
+
+La ejecución final genera la matriz correspondiente a la semana que inicia:
+
+```text
+2026-01-05
+```
+
+Para las seis parroquias elegibles se producen:
+
+```text
+6 parroquias × 7 días = 42 combinaciones
+```
+
+La interfaz permite consultar:
+
+- nivel de riesgo;
+- probabilidad de la clase predicha;
+- parroquia;
+- día de la semana;
+- distribución de niveles;
+- métricas del modelo;
+- desempeño por parroquia;
+- importancia de variables.
+
+La probabilidad mostrada corresponde a la **probabilidad asignada por el clasificador a la clase predicha** y no a la probabilidad absoluta de que ocurra una emergencia.
+
+---
+
+## 14. Interfaz gráfica
+
+La interfaz se encuentra en:
+
+```text
+app.py
+```
+
+y fue desarrollada con Streamlit.
+
+Incluye:
+
+- matriz parroquia × día;
+- clasificación visual Bajo / Medio / Alto;
+- probabilidades;
+- filtros por parroquia;
+- filtros por día;
+- filtros por nivel;
+- umbral mínimo de confianza;
+- detalle de predicciones;
+- comparación contra baselines;
+- desempeño por parroquia;
+- importancia de características.
+
+Para ejecutarla:
+
+```bash
+streamlit run app.py
+```
+
+---
+
+## 15. Estructura del proyecto
+
+```text
+Grupo10_P2/
+│
+├── 00_inspeccionar_csv.py
+├── proyecto.ipynb
+├── app.py
+├── requirements.txt
+├── README.md
+├── .gitignore
+│
+├── src/
+│   ├── preprocesamiento.py
+│   ├── caracteristicas.py
+│   ├── bosque.py
+│   ├── metricas.py
+│   └── riesgo.py
+│
+├── tests/
+│   ├── test_gini.py
+│   ├── test_pipeline.py
+│   └── test_representacion.py
+│
+├── datos/
+│   └── CSV mensuales del ECU 911
+│
+└── salidas/
+    ├── metricas.json
+    ├── modelo.joblib
+    ├── matriz_riesgo.parquet
+    ├── unidades.json
+    ├── exploratorio.png
+    ├── convergencia.png
+    ├── calibracion.png
+    └── importancias.png
+```
+
+---
+
+## 16. Instalación
+
+Se recomienda utilizar un entorno virtual.
+
+### Windows
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Las dependencias principales se encuentran en:
+
+```text
+requirements.txt
+```
+
+---
+
+## 17. Ejecución
+
+### 1. Inspeccionar los CSV
+
+```bash
+python 00_inspeccionar_csv.py datos/
+```
+
+### 2. Ejecutar las pruebas
+
+```bash
+python -m pytest tests/ -q
+```
+
+Resultado esperado:
+
+```text
+35 passed
+```
+
+### 3. Ejecutar el notebook
+
+Abrir:
+
+```text
+proyecto.ipynb
+```
+
+y ejecutar todas las celdas utilizando el entorno Python del proyecto.
+
+### 4. Ejecutar la interfaz
+
+```bash
+streamlit run app.py
+```
+
+---
+
+## 18. Pruebas
+
+El proyecto incluye **35 pruebas automáticas**:
+
+```text
+7  pruebas del criterio Gini
+12 pruebas del pipeline
+16 pruebas de representación parroquia × día
+```
+
+Para ejecutarlas:
+
+```bash
+python -m pytest tests/ -q
+```
+
+La corrida final obtuvo:
+
+```text
+35 passed
+```
+
+---
+
+## 19. Artefactos generados
+
+La ejecución final genera en `salidas/`:
+
+```text
+metricas.json
+modelo.joblib
+matriz_riesgo.parquet
+unidades.json
+exploratorio.png
+convergencia.png
+calibracion.png
+importancias.png
+```
+
+`metricas.json` contiene las métricas finales, hiperparámetros, resultados por unidad, características, tiempos y entorno de ejecución.
+
+---
+
+## 20. Rendimiento computacional
+
+En la ejecución final:
+
+```text
+Preprocesamiento              : 251.1 s
+Entrenamiento bosque final    : 46.1 s
+Memoria pico                  : 561.8 MB
+```
+
+La carga de datos fue optimizada mediante prefiltrado mensual para evitar conservar en memoria registros nacionales fuera del alcance del proyecto.
+
+---
+
+## 21. Conclusión
+
+Se implementó satisfactoriamente un clasificador Random Forest propio para estimar el nivel de riesgo de emergencias de tránsito por parroquia y día de la semana en el cantón Guayaquil.
+
+El modelo obtuvo un **F1 macro de 0.7783 en el conjunto de prueba**, superando los baselines del proyecto y la referencia inicial de 0.60.
+
+La comparación con `scikit-learn` muestra que la implementación propia alcanza un desempeño equivalente al algoritmo de referencia.
+
+Los resultados evidencian, sin embargo, una fuerte concentración de eventos en la cabecera cantonal y una mayor dificultad para diferenciar las clases Bajo y Medio en las parroquias con menor cantidad de incidentes.
+
+La solución final incluye:
+
+- procesamiento reproducible;
+- Random Forest propio;
+- evaluación temporal;
+- comparación contra baselines;
+- análisis por parroquia;
+- matriz de riesgo de la semana siguiente;
+- interfaz gráfica;
+- pruebas automatizadas.
+
+---
+
+## 22. Fuente de datos
+
+Datos históricos abiertos del:
+
+**Servicio Integrado de Seguridad ECU 911**
+
+Periodo utilizado:
+
+```text
+julio 2021 – diciembre 2025
+```
+
+Categoría:
+
+```text
+Tránsito y Movilidad
+```
+
+Alcance:
+
+```text
+Cantón Guayaquil
+```
