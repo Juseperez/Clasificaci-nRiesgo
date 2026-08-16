@@ -1,6 +1,6 @@
 {
   "entorno": {
-    "fecha_ejecucion": "2026-08-16T03:34:31-05:00",
+    "fecha_ejecucion": "2026-08-16T14:06:55-05:00",
     "python": "3.13.14",
     "sistema": "Windows 10",
     "procesador": "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel",
@@ -11,49 +11,49 @@
   "comparativa": [
     {
       "modelo": "bosque propio (NumPy)",
-      "exactitud": 0.8104,
-      "F1 macro": 0.7783,
-      "F1 bajo": 0.8547,
-      "F1 medio": 0.4912,
-      "F1 alto": 0.9889,
+      "exactitud": 0.8114,
+      "F1 macro": 0.7822,
+      "F1 bajo": 0.8544,
+      "F1 medio": 0.4923,
+      "F1 alto": 1.0,
       "recall alto": 1.0,
-      "Brier": 0.2888
+      "Brier": 0.2845
     },
     {
       "modelo": "sklearn RandomForest (referencia)",
-      "exactitud": 0.7985,
-      "F1 macro": 0.7762,
-      "F1 bajo": 0.8422,
-      "F1 medio": 0.4977,
-      "F1 alto": 0.9889,
+      "exactitud": 0.8,
+      "F1 macro": 0.7807,
+      "F1 bajo": 0.8421,
+      "F1 medio": 0.5,
+      "F1 alto": 1.0,
       "recall alto": 1.0,
-      "Brier": 0.3112
+      "Brier": 0.306
     },
     {
       "modelo": "baseline: persistencia",
-      "exactitud": 0.7491,
-      "F1 macro": 0.7141,
-      "F1 bajo": 0.8057,
-      "F1 medio": 0.3478,
-      "F1 alto": 0.9889,
+      "exactitud": 0.7533,
+      "F1 macro": 0.7197,
+      "F1 bajo": 0.8083,
+      "F1 medio": 0.3509,
+      "F1 alto": 1.0,
       "recall alto": 1.0,
       "Brier": NaN
     },
     {
       "modelo": "baseline: moda historica",
-      "exactitud": 0.7738,
-      "F1 macro": 0.7096,
-      "F1 bajo": 0.8639,
-      "F1 medio": 0.4404,
-      "F1 alto": 0.8247,
-      "recall alto": 0.7135,
+      "exactitud": 0.7743,
+      "F1 macro": 0.7132,
+      "F1 bajo": 0.864,
+      "F1 medio": 0.4424,
+      "F1 alto": 0.8333,
+      "recall alto": 0.7143,
       "Brier": NaN
     },
     {
       "modelo": "baseline: clase mayoritaria",
-      "exactitud": 0.652,
-      "F1 macro": 0.2631,
-      "F1 bajo": 0.7894,
+      "exactitud": 0.6429,
+      "F1 macro": 0.2609,
+      "F1 bajo": 0.7826,
       "F1 medio": 0.0,
       "F1 alto": 0.0,
       "recall alto": 0.0,
@@ -63,61 +63,61 @@
   "por_unidad": [
     {
       "parroquia": "GUAYAQUIL, CABECERA CANTONAL Y CAPITAL P",
-      "n": 182,
-      "clases_presentes": 2,
-      "dist_bajo_medio_alto": "4/0/178",
-      "exactitud": 0.978,
-      "f1_macro": 0.3296,
+      "n": 175,
+      "clases_presentes": 1,
+      "dist_bajo_medio_alto": "0/0/175",
+      "exactitud": 1.0,
+      "f1_macro": 0.3333,
       "recall_alto": 1.0,
-      "precision_alto": 0.978
+      "precision_alto": 1.0
     },
     {
       "parroquia": "JUAN GÓMEZ RENDÓN (PROGRESO)",
-      "n": 182,
+      "n": 175,
       "clases_presentes": 2,
-      "dist_bajo_medio_alto": "86/96/0",
-      "exactitud": 0.511,
-      "f1_macro": 0.2255,
+      "dist_bajo_medio_alto": "81/94/0",
+      "exactitud": 0.52,
+      "f1_macro": 0.2281,
       "recall_alto": 0.0,
       "precision_alto": 0.0
     },
     {
       "parroquia": "MORRO",
-      "n": 182,
+      "n": 175,
       "clases_presentes": 2,
-      "dist_bajo_medio_alto": "169/13/0",
-      "exactitud": 0.9286,
-      "f1_macro": 0.321,
+      "dist_bajo_medio_alto": "162/13/0",
+      "exactitud": 0.9257,
+      "f1_macro": 0.3205,
       "recall_alto": 0.0,
       "precision_alto": 0.0
     },
     {
       "parroquia": "POSORJA",
-      "n": 182,
+      "n": 175,
       "clases_presentes": 2,
-      "dist_bajo_medio_alto": "133/49/0",
-      "exactitud": 0.7253,
-      "f1_macro": 0.2927,
+      "dist_bajo_medio_alto": "126/49/0",
+      "exactitud": 0.7143,
+      "f1_macro": 0.2902,
       "recall_alto": 0.0,
       "precision_alto": 0.0
     },
     {
       "parroquia": "PUNÁ",
-      "n": 182,
+      "n": 175,
       "clases_presentes": 2,
-      "dist_bajo_medio_alto": "177/5/0",
-      "exactitud": 0.9725,
-      "f1_macro": 0.3287,
+      "dist_bajo_medio_alto": "170/5/0",
+      "exactitud": 0.9714,
+      "f1_macro": 0.3285,
       "recall_alto": 0.0,
       "precision_alto": 0.0
     },
     {
       "parroquia": "TENGUEL",
-      "n": 182,
+      "n": 175,
       "clases_presentes": 2,
-      "dist_bajo_medio_alto": "143/39/0",
-      "exactitud": 0.7473,
-      "f1_macro": 0.3333,
+      "dist_bajo_medio_alto": "136/39/0",
+      "exactitud": 0.7371,
+      "f1_macro": 0.3309,
       "recall_alto": 0.0,
       "precision_alto": 0.0
     }
@@ -269,15 +269,15 @@
     "unidades_excluidas_sin_historial": 0,
     "n_train": 7224,
     "n_val": 1092,
-    "n_test": 1092,
+    "n_test": 1050,
     "d": 11,
     "submuestra_por_arbol": 7224
   },
   "tiempos_s": {
-    "preprocesamiento": 251.1,
+    "preprocesamiento": 143.6,
     "construccion_X": 0.0,
-    "entrenamiento_bosque_definitivo": 46.1
+    "entrenamiento_bosque_definitivo": 25.5
   },
-  "memoria_pico_MB": 561.8,
-  "semana_objetivo": "2026-01-05"
+  "memoria_pico_MB": 562.6,
+  "semana_objetivo": "2025-12-29"
 }

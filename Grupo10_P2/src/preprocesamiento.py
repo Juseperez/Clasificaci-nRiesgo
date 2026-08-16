@@ -96,7 +96,7 @@ class Preprocesador:
     """
 
     def __init__(self, categoria="TRANSITO", alcance=("canton", "GUAYAQUIL"),
-                 nivel_espacial="parroquia"):
+                 nivel_espacial="parroquia", descartar_semanas_incompletas=True):
         self.categoria = normalizar(categoria)
         self.nivel_alcance, self.valor_alcance = (alcance if alcance else (None, None))
         if self.valor_alcance:
@@ -104,6 +104,9 @@ class Preprocesador:
         if nivel_espacial not in ("parroquia", "canton"):
             raise ValueError("nivel_espacial debe ser 'parroquia' o 'canton'")
         self.nivel_espacial = nivel_espacial
+        # Desactivar solo en pruebas unitarias que trabajan con datos mínimos y
+        # no representan una serie temporal real.
+        self.descartar_semanas_incompletas = descartar_semanas_incompletas
         self.reporte = {}
         self.origen_semanas = None
 
@@ -434,6 +437,15 @@ class Preprocesador:
         return d
 
     # -- 4. agregacion en el tensor c[g, t, s] ------------------------------
+    @staticmethod
+    def _ultima_semana_completa(origen, ultima_fecha):
+        """
+        Indice de la ultima semana cuyos SIETE dias estan dentro del periodo
+        observado. La semana s abarca [origen + 7s, origen + 7s + 6]; es completa
+        si su domingo no supera la ultima fecha con datos.
+        """
+        return int(((ultima_fecha - origen).days - 6) // 7)
+
     def agregarConteos(self, df):
         unidades = np.sort(df["_unidad"].unique())
         idx_u = {u: i for i, u in enumerate(unidades)}
@@ -445,6 +457,22 @@ class Preprocesador:
         s = df["semana"].values.astype(np.int64)
         plano = np.bincount(g * (T * S) + t * S + s, minlength=G * T * S)
         c = plano.reshape(G, T, S).astype(np.int32)
+
+        # Semanas incompletas al final del periodo. Si los datos terminan a mitad
+        # de una semana, los dias posteriores no existen en la fuente pero el
+        # tensor los cuenta como cero, lo que produce etiquetas "bajo" falsas y
+        # contamina la evaluacion. Esas semanas se descartan.
+        ultima_fecha = df["ts"].max().normalize()
+        s_max = self._ultima_semana_completa(self.origen_semanas, ultima_fecha)
+        incompletas = (S - 1 - s_max) if self.descartar_semanas_incompletas else 0
+        if incompletas > 0:
+            inicio_parcial = self.origen_semanas + pd.Timedelta(weeks=s_max + 1)
+            print(f"  [aviso] se descartan {incompletas} semana(s) incompleta(s) al "
+                  f"final: la semana del {inicio_parcial.date()} solo tiene datos hasta "
+                  f"el {ultima_fecha.date()}. Sus dias faltantes se contarian como "
+                  "cero y falsearian la etiqueta.")
+            c = c[:, :, :s_max + 1]
+            S = s_max + 1
 
         # Nombre legible y canton de cada unidad, para la interfaz
         if self.nivel_espacial == "parroquia":
@@ -468,6 +496,8 @@ class Preprocesador:
             "dias": DIAS,
             "G": G, "T": T, "S": S,
             "semanas_con_datos": np.nonzero(c.sum(axis=(0, 1)) > 0)[0],
+            "ultima_fecha_observada": ultima_fecha,
+            "semanas_incompletas_descartadas": int(incompletas),
         }
         print(f"  tensor c[g,t,s]: G={G} unidades ({self.nivel_espacial}), "
               f"T={T} dias de semana, S={S} semanas ({c.nbytes / 1e6:.2f} MB)")

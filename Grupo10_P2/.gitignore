@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
-resultado_final.zip
+resultado_final*.zip

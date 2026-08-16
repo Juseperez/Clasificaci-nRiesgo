@@ -65,7 +65,7 @@ def test_T_es_siete_dias_de_semana():
     assert T_DIAS == 7
     d = _tmpdir("t7")
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026"), _fila("11/1/2026")])
-    c, meta = Preprocesador().ejecutar(d)
+    c, meta = Preprocesador(descartar_semanas_incompletas=False).ejecutar(d)
     assert c.shape[1] == 7, c.shape
     assert meta["T"] == 7
     print("  OK |T| = 7 dias de semana (no 56 franjas de 3 h)")
@@ -75,7 +75,7 @@ def test_lunes_es_cero_y_domingo_es_seis():
     d = _tmpdir("dow")
     # 5/1/2026 es lunes; 11/1/2026 es domingo
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026"), _fila("11/1/2026")])
-    c, meta = Preprocesador().ejecutar(d)
+    c, meta = Preprocesador(descartar_semanas_incompletas=False).ejecutar(d)
     assert pd.Timestamp("2026-01-05").dayofweek == 0
     assert pd.Timestamp("2026-01-11").dayofweek == 6
     assert c[:, 0, :].sum() == 1, "el lunes debe caer en t=0"
@@ -89,7 +89,7 @@ def test_la_semana_agrupa_de_lunes_a_domingo():
     # lunes 5 y domingo 11 son la MISMA semana; lunes 12 es la siguiente
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026"), _fila("11/1/2026"),
                                  _fila("12/1/2026")])
-    c, meta = Preprocesador().ejecutar(d)
+    c, meta = Preprocesador(descartar_semanas_incompletas=False).ejecutar(d)
     assert c[:, :, 0].sum() == 2, "lunes y domingo de la misma semana"
     assert c[:, :, 1].sum() == 1, "el lunes siguiente abre semana nueva"
     assert pd.Timestamp(meta["fecha_semana"][0]).dayofweek == 0
@@ -105,7 +105,8 @@ def test_filtro_exacto_de_canton_y_categoria():
         _fila("5/1/2026", serv="Seguridad Ciudadana"),            # otra categoria
         _fila("6/1/2026", canton="GUAYAQUIL", cod=90152, parr="PROGRESO"),
     ])
-    c, meta = Preprocesador(alcance=("canton", "GUAYAQUIL")).ejecutar(d)
+    c, meta = Preprocesador(alcance=("canton", "GUAYAQUIL"),
+                            descartar_semanas_incompletas=False).ejecutar(d)
     assert int(c.sum()) == 2, f"debian quedar 2 registros, quedaron {int(c.sum())}"
     assert meta["G"] == 2, "dos parroquias distintas de Guayaquil"
     print("  OK filtro exacto: canton GUAYAQUIL + categoria transito")
@@ -115,9 +116,11 @@ def test_alcance_por_provincia_incluye_otros_cantones():
     d = _tmpdir("prov")
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026"),
                                  _fila("5/1/2026", canton="DURAN", cod=90250)])
-    c, _ = Preprocesador(alcance=("provincia", "GUAYAS")).ejecutar(d)
+    c, _ = Preprocesador(alcance=("provincia", "GUAYAS"),
+                         descartar_semanas_incompletas=False).ejecutar(d)
     assert int(c.sum()) == 2
-    c2, _ = Preprocesador(alcance=("canton", "GUAYAQUIL")).ejecutar(d)
+    c2, _ = Preprocesador(alcance=("canton", "GUAYAQUIL"),
+                          descartar_semanas_incompletas=False).ejecutar(d)
     assert int(c2.sum()) == 1
     print("  OK el alcance es un parametro: canton vs provincia")
 
@@ -126,7 +129,7 @@ def test_no_falla_por_ausencia_de_coordenadas_y_hora():
     """El dataset real no trae latitud, longitud ni hora."""
     d = _tmpdir("sincoord")
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026")])
-    c, meta = Preprocesador().ejecutar(d)
+    c, meta = Preprocesador(descartar_semanas_incompletas=False).ejecutar(d)
     assert c.sum() == 1
     assert "centro_utm" not in meta and "pares_ixiy" not in meta
     print("  OK el pipeline no requiere coordenadas ni hora")
@@ -136,7 +139,7 @@ def test_detecta_semanas_sin_datos():
     """Meses no contiguos dejan semanas vacias que envenenan rezagos y umbrales."""
     d = _tmpdir("huecos")
     _escribir_csv(f"{d}/a.csv", [_fila("5/1/2026"), _fila("2/3/2026")])
-    c, meta = Preprocesador().ejecutar(d)
+    c, meta = Preprocesador(descartar_semanas_incompletas=False).ejecutar(d)
     con_datos = meta["semanas_con_datos"]
     assert len(con_datos) == 2 and meta["S"] > 5, (len(con_datos), meta["S"])
     assert (c.sum(axis=(0, 1)) == 0).sum() == meta["S"] - 2
@@ -251,6 +254,49 @@ def test_no_hay_caracteristicas_de_vecindad_artificial():
     print(f"  OK {len(nom)} variables, ninguna de vecindad artificial ni de coordenadas")
 
 
+def test_descarta_semanas_incompletas_al_final():
+    """
+    Regresion: si los datos terminan a mitad de semana, los dias posteriores no
+    existen en la fuente pero el tensor los contaba como cero, generando
+    etiquetas "bajo" falsas que contaminaban la evaluacion y desplazaban la
+    semana objetivo una semana hacia adelante.
+
+    Caso: datos hasta el miercoles 31/12/2025. La semana del lunes 29/12 solo
+    tiene 3 de sus 7 dias, asi que debe descartarse y la ultima semana completa
+    pasa a ser la del 22/12.
+    """
+    d = _tmpdir("incompleta")
+    filas = []
+    # cinco semanas completas, del 24/11 al 28/12
+    for dia in pd.date_range("2025-11-24", "2025-12-28"):
+        filas.append(_fila(dia.strftime("%d/%m/%Y")))
+    # semana parcial: solo lunes, martes y miercoles
+    for dia in pd.date_range("2025-12-29", "2025-12-31"):
+        filas.append(_fila(dia.strftime("%d/%m/%Y")))
+    _escribir_csv(f"{d}/a.csv", filas)
+
+    c, meta = Preprocesador().ejecutar(d)
+    assert meta["semanas_incompletas_descartadas"] == 1, meta["semanas_incompletas_descartadas"]
+    ultima = pd.Timestamp(meta["fecha_semana"][-1])
+    assert ultima == pd.Timestamp("2025-12-22"), ultima
+    # los 3 dias del 29, 30 y 31 no deben aparecer en el tensor
+    assert int(c.sum()) == 35, int(c.sum())
+    print("  OK la semana parcial del 29/12 se descarta; ultima completa 22/12")
+
+
+def test_semana_completa_al_borde_no_se_descarta():
+    """Si los datos terminan justo un domingo, ninguna semana se descarta."""
+    d = _tmpdir("borde")
+    filas = [_fila(x.strftime("%d/%m/%Y"))
+             for x in pd.date_range("2025-12-01", "2025-12-28")]
+    _escribir_csv(f"{d}/a.csv", filas)
+    c, meta = Preprocesador().ejecutar(d)
+    assert meta["semanas_incompletas_descartadas"] == 0
+    assert pd.Timestamp(meta["fecha_semana"][-1]) == pd.Timestamp("2025-12-22")
+    assert int(c.sum()) == 28
+    print("  OK datos que terminan en domingo: no se descarta ninguna semana")
+
+
 # --- prediccion de la semana objetivo ---------------------------------------
 class _BosqueEspia:
     """Registra cuantas filas recibe realmente predecirProba."""
@@ -329,6 +375,9 @@ if __name__ == "__main__":
           test_variables_binarias_no_quedan_constantes]),
         ("Caracteristicas espaciales",
          [test_no_hay_caracteristicas_de_vecindad_artificial]),
+        ("Cobertura temporal",
+         [test_descarta_semanas_incompletas_al_final,
+          test_semana_completa_al_borde_no_se_descarta]),
         ("Prediccion de la semana objetivo",
          [test_solo_las_unidades_elegibles_pasan_por_el_modelo,
           test_las_unidades_sin_datos_no_muestran_probabilidad]),
