@@ -109,79 +109,265 @@ class Preprocesador:
 
     # -- 1. carga -----------------------------------------------------------
     def consolidar(self, rutas_csv):
+        """
+        Carga los CSV uno por uno y aplica el filtro de categoria/alcance
+        ANTES de concatenarlos.
+
+        Esto evita mantener en RAM simultaneamente todos los registros
+        nacionales de los 54 meses.
+        """
         if isinstance(rutas_csv, str):
             rutas_csv = sorted(glob.glob(os.path.join(rutas_csv, "*.csv")))
+
         if not rutas_csv:
             raise FileNotFoundError("No se encontraron CSV para consolidar.")
 
         partes = []
-        for ruta in rutas_csv:
+
+        total_crudos = 0
+        total_categoria = 0
+        total_area = 0
+        archivos_validos = 0
+
+        for i, ruta in enumerate(rutas_csv, 1):
             df = None
+
             for sep in [";", ",", "|", "\t"]:
                 for enc in ["utf-8-sig", "utf-8", "latin-1"]:
                     try:
-                        cand = pd.read_csv(ruta, sep=sep, encoding=enc,
-                                           low_memory=False, on_bad_lines="skip")
+                        cand = pd.read_csv(
+                            ruta,
+                            sep=sep,
+                            encoding=enc,
+                            low_memory=False,
+                            on_bad_lines="skip",
+                        )
+
                         if cand.shape[1] >= 5:
                             df = cand
                             break
+
                     except Exception:
                         continue
+
                 if df is not None:
                     break
+
             if df is None:
-                print(f"  [aviso] ilegible, se omite: {os.path.basename(ruta)}")
+                print(
+                    f"  [aviso] ilegible, se omite: "
+                    f"{os.path.basename(ruta)}"
+                )
                 continue
+
+            total_crudos += len(df)
 
             mapa = detectar_columnas(df)
+
             minimas = ["fecha", "canton", "servicio"]
-            minimas.append("cod_parroquia" if self.nivel_espacial == "parroquia" else "canton")
+
+            minimas.append(
+                "cod_parroquia"
+                if self.nivel_espacial == "parroquia"
+                else "canton"
+            )
+
+            if self.nivel_alcance == "provincia":
+                minimas.append("provincia")
+
             faltan = [k for k in set(minimas) if k not in mapa]
+
             if faltan:
-                print(f"  [aviso] {os.path.basename(ruta)} sin columnas {faltan} -> se omite")
+                print(
+                    f"  [aviso] {os.path.basename(ruta)} "
+                    f"sin columnas {faltan} -> se omite"
+                )
+                del df
                 continue
 
-            sub = pd.DataFrame({k: df[v] for k, v in mapa.items()})
+            # Canonicalizar solo las columnas reconocidas.
+            sub = pd.DataFrame({
+                k: df[v]
+                for k, v in mapa.items()
+            })
+
+            # --------------------------------------------------------------
+            # FILTRO TEMPRANO DE CATEGORIA
+            # --------------------------------------------------------------
+            servicio_norm = sub["servicio"].map(normalizar)
+
+            raiz = self.categoria[:7]  # TRANSIT
+
+            mask_categoria = servicio_norm.str.contains(
+                raiz,
+                na=False
+            )
+
+            sub = sub.loc[mask_categoria].copy()
+
+            total_categoria += len(sub)
+
+            # --------------------------------------------------------------
+            # FILTRO TEMPRANO DE AREA
+            # --------------------------------------------------------------
+            if self.nivel_alcance:
+                col_area = (
+                    "provincia"
+                    if self.nivel_alcance == "provincia"
+                    else "canton"
+                )
+
+                area_norm = sub[col_area].map(normalizar)
+
+                sub = sub.loc[
+                    area_norm == self.valor_alcance
+                ].copy()
+
+            total_area += len(sub)
+
+            # Ya no necesitamos las ~300k filas nacionales de ese mes.
+            del df
+
+            if len(sub) == 0:
+                print(
+                    f"  [{i:02d}/{len(rutas_csv):02d}] "
+                    f"{os.path.basename(ruta)} -> 0 registros del alcance"
+                )
+                continue
+
             sub["archivo"] = os.path.basename(ruta)
+
             partes.append(sub)
+            archivos_validos += 1
+
+            print(
+                f"  [{i:02d}/{len(rutas_csv):02d}] "
+                f"{os.path.basename(ruta)} -> "
+                f"{len(sub):,} registros relevantes"
+            )
 
         if not partes:
-            raise ValueError("Ningun archivo aporto las columnas minimas. "
-                             "Corre 00_inspeccionar_csv.py y amplia _ALIAS.")
+            raise ValueError(
+                "Ningun archivo aporto registros para el alcance. "
+                "Corre 00_inspeccionar_csv.py y revisa _ALIAS."
+            )
+
+        # Aqui ya concatenamos SOLO Transito + Guayaquil,
+        # no millones de registros nacionales.
         out = pd.concat(partes, ignore_index=True)
-        self.reporte["crudos"] = len(out)
-        print(f"  consolidados {len(out):,} registros de {len(partes)} archivos")
+
+        self.reporte.update({
+            "crudos": total_crudos,
+            "tras_categoria": total_categoria,
+            "tras_area": total_area,
+            "archivos_validos": archivos_validos,
+        })
+
+        # Indica a filtrarAlcance que categoria y area ya fueron filtradas.
+        self._prefiltrado_alcance = True
+
+        print(
+            f"\n  consolidados {len(out):,} registros relevantes "
+            f"de {archivos_validos} archivos"
+        )
+
+        print(
+            f"  filas nacionales leidas : {total_crudos:,}"
+        )
+
+        print(
+            f"  tras categoria           : {total_categoria:,}"
+        )
+
+        print(
+            f"  tras alcance             : {total_area:,}"
+        )
+
         return out
 
     # -- 2. filtro de alcance y depuracion ----------------------------------
     def filtrarAlcance(self, df):
-        n0 = len(df)
+        """
+        Completa la depuracion despues de consolidar.
+
+        Si consolidar() ya aplico categoria y alcance, no vuelve a cargar
+        ni filtrar los registros nacionales; aqui se validan fecha y unidad.
+        """
         d = df.copy()
-        d["_servicio"] = d["servicio"].map(normalizar)
 
-        # Categoria: en el dataset real la de transito se llama
-        # "Transito y Movilidad"; se busca por raiz para tolerar variantes.
-        raiz = self.categoria[:7]                       # TRANSIT
-        d = d[d["_servicio"].str.contains(raiz, na=False)]
-        n_cat = len(d)
+        if getattr(self, "_prefiltrado_alcance", False):
+            n0 = int(self.reporte.get("crudos", len(d)))
+            n_cat = int(self.reporte.get("tras_categoria", len(d)))
+            n_area = int(self.reporte.get("tras_area", len(d)))
 
-        n_area = n_cat
-        if self.nivel_alcance:
-            col = "provincia" if self.nivel_alcance == "provincia" else "canton"
-            if col not in d.columns:
-                raise ValueError(f"El dataset no trae la columna '{col}'.")
-            d["_area"] = d[col].map(normalizar)
-            d = d[d["_area"] == self.valor_alcance]
-            n_area = len(d)
+        else:
+            n0 = len(d)
 
-        fecha = pd.to_datetime(d["fecha"], errors="coerce", dayfirst=True)
-        d = d[fecha.notna()]
-        d["ts"] = fecha[fecha.notna()]
+            d["_servicio"] = d["servicio"].map(normalizar)
+
+            raiz = self.categoria[:7]
+
+            d = d[
+                d["_servicio"].str.contains(
+                    raiz,
+                    na=False
+                )
+            ]
+
+            n_cat = len(d)
+
+            n_area = n_cat
+
+            if self.nivel_alcance:
+                col = (
+                    "provincia"
+                    if self.nivel_alcance == "provincia"
+                    else "canton"
+                )
+
+                if col not in d.columns:
+                    raise ValueError(
+                        f"El dataset no trae la columna '{col}'."
+                    )
+
+                d["_area"] = d[col].map(normalizar)
+
+                d = d[
+                    d["_area"] == self.valor_alcance
+                ]
+
+                n_area = len(d)
+
+        # --------------------------------------------------------------
+        # VALIDACION DE FECHA
+        # --------------------------------------------------------------
+        fecha = pd.to_datetime(
+            d["fecha"],
+            errors="coerce",
+            dayfirst=True
+        )
+
+        mask_fecha = fecha.notna()
+
+        d = d.loc[mask_fecha].copy()
+
+        d["ts"] = fecha.loc[mask_fecha]
+
         n_fecha = len(d)
 
-        # Unidad espacial: sin ella el registro no es ubicable
-        col_u = "cod_parroquia" if self.nivel_espacial == "parroquia" else "canton"
-        d = d[d[col_u].notna()]
+        # --------------------------------------------------------------
+        # VALIDACION DE UNIDAD ESPACIAL
+        # --------------------------------------------------------------
+        col_u = (
+            "cod_parroquia"
+            if self.nivel_espacial == "parroquia"
+            else "canton"
+        )
+
+        d = d[
+            d[col_u].notna()
+        ].copy()
+
         n_unidad = len(d)
 
         self.reporte.update({
@@ -191,14 +377,40 @@ class Preprocesador:
             "descartados_sin_unidad": n_fecha - n_unidad,
             "validos": n_unidad,
         })
-        print(f"  filtro alcance: {n0:,} -> {n_unidad:,} validos")
-        print(f"    fuera de categoria '{self.categoria}' : {n0 - n_cat:,}")
+
+        print(
+            f"  filtro alcance: {n0:,} -> "
+            f"{n_unidad:,} validos"
+        )
+
+        print(
+            f"    fuera de categoria '{self.categoria}' : "
+            f"{n0 - n_cat:,}"
+        )
+
         if self.nivel_alcance:
-            print(f"    fuera de {self.nivel_alcance} {self.valor_alcance:<12}: {n_cat - n_area:,}")
-        print(f"    fecha invalida                  : {n_area - n_fecha:,}")
-        print(f"    sin unidad espacial             : {n_fecha - n_unidad:,}")
+            print(
+                f"    fuera de {self.nivel_alcance} "
+                f"{self.valor_alcance:<12}: "
+                f"{n_cat - n_area:,}"
+            )
+
+        print(
+            f"    fecha invalida                  : "
+            f"{n_area - n_fecha:,}"
+        )
+
+        print(
+            f"    sin unidad espacial             : "
+            f"{n_fecha - n_unidad:,}"
+        )
+
         if n_unidad == 0:
-            raise ValueError("El filtro dejo cero registros: revisa categoria y alcance.")
+            raise ValueError(
+                "El filtro dejo cero registros: "
+                "revisa categoria y alcance."
+            )
+
         return d
 
     # -- 3. discretizacion espacial y temporal ------------------------------

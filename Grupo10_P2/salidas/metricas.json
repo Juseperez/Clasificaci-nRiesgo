@@ -1,0 +1,283 @@
+{
+  "entorno": {
+    "fecha_ejecucion": "2026-08-16T03:34:31-05:00",
+    "python": "3.13.14",
+    "sistema": "Windows 10",
+    "procesador": "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel",
+    "cpus": 4,
+    "numpy": "2.5.2",
+    "pandas": "3.0.5"
+  },
+  "comparativa": [
+    {
+      "modelo": "bosque propio (NumPy)",
+      "exactitud": 0.8104,
+      "F1 macro": 0.7783,
+      "F1 bajo": 0.8547,
+      "F1 medio": 0.4912,
+      "F1 alto": 0.9889,
+      "recall alto": 1.0,
+      "Brier": 0.2888
+    },
+    {
+      "modelo": "sklearn RandomForest (referencia)",
+      "exactitud": 0.7985,
+      "F1 macro": 0.7762,
+      "F1 bajo": 0.8422,
+      "F1 medio": 0.4977,
+      "F1 alto": 0.9889,
+      "recall alto": 1.0,
+      "Brier": 0.3112
+    },
+    {
+      "modelo": "baseline: persistencia",
+      "exactitud": 0.7491,
+      "F1 macro": 0.7141,
+      "F1 bajo": 0.8057,
+      "F1 medio": 0.3478,
+      "F1 alto": 0.9889,
+      "recall alto": 1.0,
+      "Brier": NaN
+    },
+    {
+      "modelo": "baseline: moda historica",
+      "exactitud": 0.7738,
+      "F1 macro": 0.7096,
+      "F1 bajo": 0.8639,
+      "F1 medio": 0.4404,
+      "F1 alto": 0.8247,
+      "recall alto": 0.7135,
+      "Brier": NaN
+    },
+    {
+      "modelo": "baseline: clase mayoritaria",
+      "exactitud": 0.652,
+      "F1 macro": 0.2631,
+      "F1 bajo": 0.7894,
+      "F1 medio": 0.0,
+      "F1 alto": 0.0,
+      "recall alto": 0.0,
+      "Brier": NaN
+    }
+  ],
+  "por_unidad": [
+    {
+      "parroquia": "GUAYAQUIL, CABECERA CANTONAL Y CAPITAL P",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "4/0/178",
+      "exactitud": 0.978,
+      "f1_macro": 0.3296,
+      "recall_alto": 1.0,
+      "precision_alto": 0.978
+    },
+    {
+      "parroquia": "JUAN GÓMEZ RENDÓN (PROGRESO)",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "86/96/0",
+      "exactitud": 0.511,
+      "f1_macro": 0.2255,
+      "recall_alto": 0.0,
+      "precision_alto": 0.0
+    },
+    {
+      "parroquia": "MORRO",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "169/13/0",
+      "exactitud": 0.9286,
+      "f1_macro": 0.321,
+      "recall_alto": 0.0,
+      "precision_alto": 0.0
+    },
+    {
+      "parroquia": "POSORJA",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "133/49/0",
+      "exactitud": 0.7253,
+      "f1_macro": 0.2927,
+      "recall_alto": 0.0,
+      "precision_alto": 0.0
+    },
+    {
+      "parroquia": "PUNÁ",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "177/5/0",
+      "exactitud": 0.9725,
+      "f1_macro": 0.3287,
+      "recall_alto": 0.0,
+      "precision_alto": 0.0
+    },
+    {
+      "parroquia": "TENGUEL",
+      "n": 182,
+      "clases_presentes": 2,
+      "dist_bajo_medio_alto": "143/39/0",
+      "exactitud": 0.7473,
+      "f1_macro": 0.3333,
+      "recall_alto": 0.0,
+      "precision_alto": 0.0
+    }
+  ],
+  "importancias": [
+    {
+      "variable": "rezago_1",
+      "importancia": 0.18230291901963755
+    },
+    {
+      "variable": "media_movil_12",
+      "importancia": 0.16902605232118847
+    },
+    {
+      "variable": "densidad_historica_parroquia",
+      "importancia": 0.16010551716625912
+    },
+    {
+      "variable": "media_movil_4",
+      "importancia": 0.14610183610579786
+    },
+    {
+      "variable": "rezago_2",
+      "importancia": 0.13145986639066748
+    },
+    {
+      "variable": "rezago_3",
+      "importancia": 0.06057168825224496
+    },
+    {
+      "variable": "mes",
+      "importancia": 0.05468140521547531
+    },
+    {
+      "variable": "rezago_4",
+      "importancia": 0.04930127555370733
+    },
+    {
+      "variable": "dia_semana",
+      "importancia": 0.03655402065630767
+    },
+    {
+      "variable": "es_fin_de_semana",
+      "importancia": 0.00624857725917236
+    },
+    {
+      "variable": "es_feriado",
+      "importancia": 0.003646842059541903
+    }
+  ],
+  "busqueda_validacion": [
+    {
+      "profundidad": 16,
+      "potencia_pesos": 1.0,
+      "f1_macro": 0.8293753028683325,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    },
+    {
+      "profundidad": 12,
+      "potencia_pesos": 0.5,
+      "f1_macro": 0.8275036202000637,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    },
+    {
+      "profundidad": 12,
+      "potencia_pesos": 1.0,
+      "f1_macro": 0.8273521313887175,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    },
+    {
+      "profundidad": 8,
+      "potencia_pesos": 0.5,
+      "f1_macro": 0.8265899781298698,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    },
+    {
+      "profundidad": 16,
+      "potencia_pesos": 0.5,
+      "f1_macro": 0.8251094227208813,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    },
+    {
+      "profundidad": 8,
+      "potencia_pesos": 1.0,
+      "f1_macro": 0.8233057884294878,
+      "recall_alto": 1.0,
+      "precision_alto": 0.9945054945054945
+    }
+  ],
+  "hiperparametros": {
+    "nArboles": 100,
+    "profundidadMax": 16,
+    "minMuestrasHoja": 5,
+    "mAtributos": null,
+    "maxMuestrasPorArbol": 200000,
+    "nBins": 32,
+    "semilla": 42,
+    "potenciaPesos": 1.0,
+    "criterio_seleccion": "f1_macro",
+    "f1_macro_validacion": 0.8268
+  },
+  "etiqueta": {
+    "modo_usado": "global",
+    "umbral_bajo": 0.0,
+    "umbral_alto": 121.0,
+    "corresponde_a_percentiles_solicitados": true,
+    "base_de_calculo": "todos",
+    "masa_acumulada_umbral_bajo_pct": 63.69047619047619,
+    "masa_acumulada_umbral_alto_pct": 90.08859357696566,
+    "alto_supera_medio": false,
+    "proporciones_pct": [
+      63.69,
+      26.398,
+      9.911
+    ],
+    "dias_colapsados": null,
+    "escalera_recorrida": [
+      [
+        "global",
+        "viable",
+        [
+          63.69,
+          26.398,
+          9.911
+        ],
+        null
+      ]
+    ]
+  },
+  "representacion": {
+    "unidad_espacial": "parroquia",
+    "unidad_temporal": "dia de la semana",
+    "T": 7,
+    "alcance": [
+      "canton",
+      "GUAYAQUIL"
+    ],
+    "nota": "El dataset abierto del ECU 911 no publica coordenadas ni hora; las unidades se ajustaron a la maxima granularidad verificable en la fuente."
+  },
+  "alcance": {
+    "nivel_elegibilidad": "unidad",
+    "G_total": 6,
+    "G_elegibles": 6,
+    "unidades_excluidas_sin_historial": 0,
+    "n_train": 7224,
+    "n_val": 1092,
+    "n_test": 1092,
+    "d": 11,
+    "submuestra_por_arbol": 7224
+  },
+  "tiempos_s": {
+    "preprocesamiento": 251.1,
+    "construccion_X": 0.0,
+    "entrenamiento_bosque_definitivo": 46.1
+  },
+  "memoria_pico_MB": 561.8,
+  "semana_objetivo": "2026-01-05"
+}

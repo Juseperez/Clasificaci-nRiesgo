@@ -1,0 +1,10 @@
+numpy
+pandas
+matplotlib
+scikit-learn
+joblib
+streamlit
+pytest
+ipykernel
+psutil
+pyarrow
