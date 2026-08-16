@@ -49,15 +49,16 @@ Las implementaciones de Machine Learning de terceros no participan en la soluci�
 
 El proyecto fue **implementado, probado y ejecutado completamente** utilizando los **54 archivos mensuales consecutivos correspondientes al periodo julio de 2021 – diciembre de 2025**.
 
-La ejecución final verificó:
+La versión final verifica:
 
-- **35/35 pruebas automáticas superadas**;
+- **37/37 pruebas automáticas superadas**;
 - preprocesamiento completo de los datos del ECU 911;
-- construcción de la representación temporal;
+- descarte explícito de semanas finales incompletas para evitar días faltantes tratados como cero;
+- construcción de la representación parroquia × día;
 - entrenamiento del Random Forest propio;
 - ajuste mediante conjunto de validación;
 - evaluación final sobre un conjunto de prueba temporal independiente;
-- comparación contra baselines;
+- comparación contra tres baselines;
 - comparación contra Random Forest de `scikit-learn`;
 - generación de probabilidades por clase;
 - análisis de importancia de variables;
@@ -66,7 +67,7 @@ La ejecución final verificó:
 - interfaz gráfica desarrollada con Streamlit;
 - generación y almacenamiento de los artefactos finales.
 
-La ejecución final se realizó el **16 de agosto de 2026**.
+La corrida definitiva se realizó el **16 de agosto de 2026**.
 
 Entorno registrado:
 
@@ -138,7 +139,7 @@ Fuente:
 
 **Servicio Integrado de Seguridad ECU 911**
 
-Periodo utilizado:
+Periodo descargado:
 
 ```text
 julio 2021 – diciembre 2025
@@ -156,36 +157,52 @@ Alcance geográfico:
 Cantón Guayaquil
 ```
 
-El preprocesamiento final consolidó aproximadamente:
+Se procesaron **54 archivos mensuales consecutivos**. Después de filtrar categoría y cantón se obtuvieron:
 
 ```text
-268,049 registros de Tránsito y Movilidad
-del cantón Guayaquil
+268,049 registros relevantes
 ```
+
+La última semana calendario iniciada el **29 de diciembre de 2025** no estaba completa: la fuente disponible terminaba el **31 de diciembre de 2025**, por lo que solo contenía tres de sus siete días.
+
+Para impedir que los cuatro días no observados fueran interpretados como conteos cero, esa semana se excluyó íntegramente del tensor observado.
+
+La exclusión retiró **739 registros** pertenecientes a esa semana parcial. El tensor final utilizado por el pipeline contiene:
+
+```text
+267,310 eventos
+235 semanas completas
+6 parroquias
+7 días por semana
+```
+
+La cabecera cantonal concentra aproximadamente el **98.9 %** de los eventos del tensor, por lo que las métricas agregadas se complementan con resultados por parroquia.
 
 ---
 
 ## 5. Partición temporal
 
-Para evitar fuga de información entre pasado y futuro se utiliza una **partición estrictamente temporal**.
+Para evitar fuga de información entre pasado y futuro se utiliza una **partición estrictamente temporal por semanas**, sin división aleatoria.
 
-| Conjunto | Periodo |
-|---|---|
-| Entrenamiento | julio 2021 – diciembre 2024 |
-| Validación | enero 2025 – junio 2025 |
-| Prueba | julio 2025 – diciembre 2025 |
+El dataset comienza en julio de 2021. Las primeras **12 semanas** se reservan como periodo de inicialización (`BURN_IN = 12`) para disponer de historial suficiente para la ventana `media_movil_12`; por ello no se utilizan como objetivos supervisados.
 
-Instancias utilizadas:
+Las semanas se asignan a cada conjunto según la fecha del **lunes que las inicia**:
+
+| Conjunto | Semanas utilizadas | Nº semanas | Instancias |
+|---|---|---:|---:|
+| Entrenamiento | 20/09/2021 – 30/12/2024 | 172 | **7,224** |
+| Validación | 06/01/2025 – 30/06/2025 | 26 | **1,092** |
+| Prueba | 07/07/2025 – 22/12/2025 | 25 | **1,050** |
+
+Cada semana aporta:
 
 ```text
-Entrenamiento : 7,224
-Validación    : 1,092
-Prueba        : 1,092
+6 parroquias × 7 días = 42 instancias
 ```
 
 El conjunto de prueba se utiliza únicamente para la evaluación final.
 
-No se realiza una división aleatoria entre semanas.
+La semana parcial iniciada el 29/12/2025 queda fuera de entrenamiento, validación y prueba y se trata como horizonte futuro a clasificar.
 
 ---
 
@@ -207,15 +224,14 @@ Sus responsabilidades incluyen:
 6. validación de unidades espaciales;
 7. asignación de parroquia;
 8. asignación del día de la semana;
-9. agregación temporal de incidentes.
+9. agregación temporal de incidentes;
+10. detección y descarte de semanas finales incompletas.
 
 ### Optimización de memoria
 
 Los archivos originales contienen registros de todo Ecuador.
 
 Para evitar conservar simultáneamente millones de registros nacionales en memoria, cada archivo mensual se filtra **antes de incorporarse al conjunto consolidado**.
-
-El flujo es:
 
 ```text
 CSV mensual
@@ -231,7 +247,17 @@ conservación de registros relevantes
 siguiente archivo
 ```
 
-Esta optimización permitió ejecutar el pipeline completo en un equipo de recursos limitados sin modificar la lógica del modelo.
+En la corrida definitiva se leyeron **15,510,884 filas nacionales**, de las cuales **268,049** pertenecían al alcance final.
+
+El prefiltrado mensual permitió ejecutar el pipeline sin concatenar previamente todos los registros nacionales.
+
+### Semanas incompletas
+
+Una semana observada se considera válida únicamente si sus siete días están cubiertos por el periodo disponible.
+
+La última semana iniciada el 29/12/2025 solo tenía datos hasta el 31/12/2025 y fue descartada para evitar que los días 1–4 de enero de 2026 fueran representados artificialmente como cero.
+
+El comportamiento está protegido por pruebas de regresión específicas en `tests/test_representacion.py`.
 
 ---
 
@@ -379,24 +405,56 @@ Semilla                  : 42
 Potencia de pesos        : 1.0
 ```
 
-La selección aleatoria de atributos se realiza automáticamente siguiendo la regla de aproximadamente:
+La selección aleatoria de atributos se realiza automáticamente siguiendo aproximadamente:
 
 ```text
 sqrt(d)
 ```
 
-atributos candidatos por nodo.
+Con `d = 11`, se consideran aproximadamente **3 atributos candidatos por nodo**.
 
-El criterio utilizado para seleccionar la configuración fue:
+El parámetro:
 
 ```text
-F1 macro sobre el conjunto de validación
+maxMuestrasPorArbol = 200000
 ```
 
-El modelo final obtuvo en validación:
+funciona como una cota de seguridad para conjuntos grandes.
+
+En la corrida final:
 
 ```text
-F1 macro = 0.8268
+n_train = 7,224
+```
+
+por lo que cada árbol utiliza una muestra bootstrap del mismo tamaño que el conjunto de entrenamiento, con reemplazo.
+
+### Selección de hiperparámetros
+
+La búsqueda se realizó únicamente sobre el conjunto de validación.
+
+Se evaluaron:
+
+```text
+profundidad ∈ {8, 12, 16}
+potenciaPesos ∈ {1.0, 0.5}
+```
+
+utilizando **30 árboles por configuración candidata** para reducir el costo de exploración.
+
+La mejor configuración encontrada fue:
+
+```text
+profundidadMax = 16
+potenciaPesos  = 1.0
+```
+
+El modelo definitivo se reentrenó con **100 árboles**.
+
+El F1 macro del modelo final sobre validación fue:
+
+```text
+0.8268
 ```
 
 ---
@@ -412,15 +470,34 @@ F1 macro
 También se evalúan:
 
 - exactitud;
-- precisión por clase;
-- recall por clase;
-- F1 por clase;
+- precisión, recall y F1 por clase;
 - recall de la clase Alto;
-- AUC-ROC OvR;
+- matriz de confusión;
+- AUC-ROC One-vs-Rest;
 - Brier Score;
+- curva de calibración;
 - comportamiento por parroquia.
 
 La clase **Alto** recibe especial atención debido al costo potencial de no identificar correctamente un periodo de mayor riesgo.
+
+### Matriz de confusión del bosque propio
+
+Filas = clase real.  
+Columnas = clase predicha.
+
+| Real \ Predicha | Bajo | Medio | Alto |
+|---|---:|---:|---:|
+| Bajo | **581** | 94 | 0 |
+| Medio | 104 | **96** | 0 |
+| Alto | 0 | 0 | **175** |
+
+### AUC-ROC OvR
+
+```text
+Bajo  = 0.8595
+Medio = 0.7903
+Alto  = 1.0000
+```
 
 ---
 
@@ -428,33 +505,37 @@ La clase **Alto** recibe especial atención debido al costo potencial de no iden
 
 ### Comparación sobre el conjunto de prueba
 
-| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Recall Alto |
-|---|---:|---:|---:|---:|---:|---:|
-| **Bosque propio (NumPy)** | **0.8104** | **0.7783** | **0.8547** | 0.4912 | **0.9889** | **1.0000** |
-| sklearn RandomForest | 0.7985 | 0.7762 | 0.8422 | **0.4977** | 0.9889 | 1.0000 |
-| Persistencia | 0.7491 | 0.7141 | 0.8057 | 0.3478 | 0.9889 | 1.0000 |
-| Moda histórica | 0.7738 | 0.7096 | 0.8639 | 0.4404 | 0.8247 | 0.7135 |
-| Clase mayoritaria | 0.6520 | 0.2631 | 0.7894 | 0.0000 | 0.0000 | 0.0000 |
+| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Recall Alto | Brier |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **Bosque propio (NumPy)** | **0.8114** | **0.7822** | **0.8544** | 0.4923 | **1.0000** | **1.0000** | **0.2845** |
+| sklearn RandomForest | 0.8000 | 0.7807 | 0.8421 | **0.5000** | 1.0000 | 1.0000 | 0.3060 |
+| Persistencia | 0.7533 | 0.7197 | 0.8083 | 0.3509 | 1.0000 | 1.0000 | — |
+| Moda histórica | 0.7743 | 0.7132 | 0.8640 | 0.4424 | 0.8333 | 0.7143 | — |
+| Clase mayoritaria | 0.6429 | 0.2609 | 0.7826 | 0.0000 | 0.0000 | 0.0000 | — |
 
 Resultados principales del modelo propio:
 
 ```text
-Accuracy     = 0.8104
-F1 macro     = 0.7783
-F1 Bajo      = 0.8547
-F1 Medio     = 0.4912
-F1 Alto      = 0.9889
+Accuracy     = 0.8114
+F1 macro     = 0.7822
+F1 Bajo      = 0.8544
+F1 Medio     = 0.4923
+F1 Alto      = 1.0000
 Recall Alto  = 1.0000
-Brier Score  = 0.2888
+Brier Score  = 0.2845
 ```
 
-El modelo supera la referencia inicial de:
+El modelo supera la meta inicial de referencia de:
 
 ```text
 F1 macro = 0.60
 ```
 
-y también supera los baselines definidos sobre el mismo conjunto de prueba.
+y también supera los tres baselines evaluados sobre exactamente el mismo conjunto de prueba.
+
+La clase **Medio** continúa siendo la más difícil de discriminar.
+
+El desempeño perfecto observado para la clase **Alto** debe interpretarse junto con la fuerte concentración de esa clase en la cabecera cantonal.
 
 ---
 
@@ -463,29 +544,29 @@ y también supera los baselines definidos sobre el mismo conjunto de prueba.
 El Random Forest propio obtuvo:
 
 ```text
-F1 macro propio   = 0.7783
-F1 macro sklearn  = 0.7762
+F1 macro propio   = 0.7822
+F1 macro sklearn  = 0.7807
 ```
 
-La diferencia es:
+La diferencia fue:
 
 ```text
-+0.0021
++0.0015
 ```
 
-a favor de la implementación propia en esta ejecución.
+a favor de la implementación propia en esta corrida, equivalente a **0.15 puntos porcentuales de F1 macro**.
 
-Esto muestra que el bosque desarrollado desde cero alcanza un comportamiento comparable al Random Forest utilizado como referencia.
+El propósito de esta comparación no es demostrar superioridad universal, sino verificar que la implementación desarrollada desde cero alcanza un comportamiento comparable a una referencia ampliamente utilizada.
 
-`scikit-learn` **no participa en las predicciones finales de la solución**; se emplea únicamente para contrastar experimentalmente el funcionamiento del algoritmo propio.
+`scikit-learn` **no participa en las predicciones finales de la solución**; se emplea únicamente como benchmark externo.
 
 ### XGBoost
 
 El notebook conserva XGBoost como benchmark externo opcional.
 
-No forma parte de la solución principal y **no se incluye en las métricas de la corrida final reportada**.
+En la corrida definitiva XGBoost no estaba instalado, por lo que **no forma parte de las métricas reportadas**.
 
-La comparación reproducida en esta ejecución corresponde al Random Forest de `scikit-learn`.
+La comparación reproducida y almacenada corresponde al Random Forest de `scikit-learn`.
 
 ---
 
@@ -500,10 +581,16 @@ Las características con mayor importancia por reducción de impureza fueron:
 | `densidad_historica_parroquia` | 0.1601 |
 | `media_movil_4` | 0.1461 |
 | `rezago_2` | 0.1315 |
+| `rezago_3` | 0.0606 |
+| `mes` | 0.0547 |
+| `rezago_4` | 0.0493 |
+| `dia_semana` | 0.0366 |
+| `es_fin_de_semana` | 0.0062 |
+| `es_feriado` | 0.0036 |
 
-Según la importancia por reducción de impureza del bosque propio, los **rezagos, medias móviles y la densidad histórica de la parroquia** tuvieron mayor peso en las decisiones del modelo que las variables de calendario como feriado o fin de semana.
+Según la importancia por reducción de impureza del bosque propio, los **rezagos, medias móviles y la densidad histórica de la parroquia** tuvieron mayor peso en las decisiones internas del modelo que variables simples de calendario como feriado o fin de semana.
 
-Estas importancias describen el comportamiento interno del clasificador y no deben interpretarse como relaciones causales.
+Estas importancias describen el comportamiento interno del clasificador y **no deben interpretarse como relaciones causales**.
 
 ---
 
@@ -513,20 +600,28 @@ La distribución de los registros no es espacialmente uniforme.
 
 La cabecera cantonal concentra la gran mayoría de las emergencias registradas, por lo que se evalúa también el desempeño de manera desagregada.
 
+Cada parroquia aporta **175 instancias** al conjunto de prueba.
+
 | Parroquia | n | Bajo / Medio / Alto | Accuracy |
 |---|---:|---:|---:|
-| Guayaquil, cabecera cantonal | 182 | 4 / 0 / 178 | 0.9780 |
-| Juan Gómez Rendón (Progreso) | 182 | 86 / 96 / 0 | 0.5110 |
-| Morro | 182 | 169 / 13 / 0 | 0.9286 |
-| Posorja | 182 | 133 / 49 / 0 | 0.7253 |
-| Puná | 182 | 177 / 5 / 0 | 0.9725 |
-| Tenguel | 182 | 143 / 39 / 0 | 0.7473 |
+| Guayaquil, cabecera cantonal | 175 | 0 / 0 / 175 | **1.0000** |
+| Juan Gómez Rendón (Progreso) | 175 | 81 / 94 / 0 | 0.5200 |
+| Morro | 175 | 162 / 13 / 0 | 0.9257 |
+| Posorja | 175 | 126 / 49 / 0 | 0.7143 |
+| Puná | 175 | 170 / 5 / 0 | 0.9714 |
+| Tenguel | 175 | 136 / 39 / 0 | 0.7371 |
 
-La clase **Alto** aparece fuertemente concentrada en la cabecera cantonal.
+La clase **Alto** aparece concentrada en la cabecera cantonal durante el periodo de prueba.
 
-Por esta razón, el alto desempeño de esa clase debe interpretarse junto con la distribución espacial de los datos.
+Por esa razón, su:
 
-La diferenciación entre las clases **Bajo** y **Medio** constituye el problema más difícil para el clasificador.
+```text
+F1 Alto = 1.0000
+```
+
+no debe interpretarse como evidencia de desempeño uniforme en todo el cantón.
+
+La diferenciación entre **Bajo** y **Medio** constituye el principal reto del clasificador.
 
 ---
 
@@ -536,19 +631,19 @@ La diferenciación entre las clases **Bajo** y **Medio** constituye el problema 
 
 La fuente utilizada no contiene coordenadas.
 
-Por ello no es posible construir de manera verificable:
+Por ello no es posible construir de manera verificable una grilla de:
 
 ```text
-celdas de 1 km × 1 km
+1 km × 1 km
 ```
+
+con la fuente abierta utilizada.
 
 La máxima resolución espacial disponible es la **parroquia**.
 
 ### 15.2 Resolución temporal
 
-La fuente únicamente incluye la fecha del incidente.
-
-No contiene hora.
+La fuente únicamente incluye la fecha del incidente y no contiene hora.
 
 Por ello no es posible construir de manera verificable:
 
@@ -560,11 +655,33 @@ La representación temporal final utiliza el **día de la semana**.
 
 ### 15.3 Concentración espacial
 
-La cabecera cantonal concentra aproximadamente el **98.9 % de los eventos de tránsito observados** en el cantón.
+La cabecera cantonal concentra aproximadamente el **98.9 % de los eventos de tránsito del tensor final**.
 
-Esto limita la cantidad de ejemplos disponibles para las parroquias con menor volumen de incidentes y debe considerarse al interpretar las métricas agregadas.
+Esto limita la cantidad de ejemplos disponibles para parroquias con menor volumen y obliga a interpretar las métricas agregadas junto con los resultados por unidad.
 
-### 15.4 Anomalía de enero de 2024
+### 15.4 Cobertura en los bordes temporales
+
+La publicación utilizada comienza el **1 de julio de 2021** y termina el **31 de diciembre de 2025**.
+
+La primera semana calendario del tensor comienza el **28/06/2021**, por lo que sus primeros tres días quedan fuera del periodo disponible.
+
+Esta semana se encuentra dentro del:
+
+```text
+BURN_IN = 12
+```
+
+y no se utiliza como objetivo supervisado.
+
+El sistema también descarta explícitamente la semana final incompleta.
+
+Como resultado, el conjunto de prueba termina en la última semana completa iniciada el:
+
+```text
+22/12/2025
+```
+
+### 15.5 Anomalía de enero de 2024
 
 Durante la inspección de calidad se identificó un comportamiento anómalo en el archivo correspondiente a enero de 2024.
 
@@ -583,13 +700,13 @@ El archivo de enero de 2024 contiene:
 40,351 registros correspondientes a Guayaquil
 ```
 
-por lo que no corresponde a un archivo vacío o incompleto en términos de número total de registros.
+por lo que no corresponde a un archivo vacío en términos de volumen total.
 
 A nivel nacional se observaron:
 
 ```text
-Seguridad Ciudadana      : 200,318
-Tránsito y Movilidad     :   2,634
+Seguridad Ciudadana  : 200,318
+Tránsito y Movilidad :   2,634
 ```
 
 También se verificó que los subtipos de tránsito observados en febrero no aparecen reclasificados directamente dentro de `Seguridad Ciudadana` en enero para Guayaquil.
@@ -602,21 +719,29 @@ Por ello, **no se realizaron imputaciones ni reclasificaciones artificiales**: e
 
 ## 16. Predicción de la semana siguiente
 
-La ejecución final genera una matriz de riesgo correspondiente a la semana que inicia:
+La última semana completa observada comienza el:
 
 ```text
-2026-01-05
+2025-12-22
 ```
+
+La matriz de riesgo final corresponde a la semana inmediatamente siguiente:
+
+```text
+2025-12-29
+```
+
+La fuente contiene registros parciales del 29, 30 y 31 de diciembre, pero esa semana no se utiliza como semana observada porque faltan cuatro de sus siete días.
+
+Por ello se trata íntegramente como el horizonte a clasificar.
 
 Las seis parroquias elegibles producen:
 
 ```text
-6 parroquias × 7 días
-=
-42 combinaciones
+6 parroquias × 7 días = 42 combinaciones
 ```
 
-En la ejecución final se obtuvieron:
+Distribución de predicciones:
 
 ```text
 Alto  : 7
@@ -624,13 +749,9 @@ Medio : 7
 Bajo  : 28
 ```
 
-La matriz permite consultar tanto el nivel de riesgo como la probabilidad asignada por el clasificador.
+La matriz permite consultar tanto el nivel como la probabilidad asignada a la **clase predicha**.
 
-La probabilidad mostrada corresponde a:
-
-> la probabilidad estimada de la **clase predicha** por el modelo.
-
-No debe interpretarse como la probabilidad absoluta de que ocurra una emergencia.
+> La probabilidad mostrada es la confianza probabilística del clasificador en la clase asignada; **no** es la probabilidad absoluta de que ocurra una emergencia.
 
 ---
 
@@ -666,6 +787,10 @@ La interfaz puede ejecutarse con:
 streamlit run app.py
 ```
 
+La probabilidad presentada corresponde a la probabilidad de la **clase predicha** por el clasificador.
+
+No debe interpretarse como una estimación directa de la probabilidad absoluta de ocurrencia de una emergencia.
+
 ---
 
 ## 18. Elegibilidad de parroquias
@@ -700,14 +825,14 @@ Parroquias excluidas  : 0
 
 ## 19. Baselines
 
-La evaluación utiliza tres referencias simples sobre exactamente el mismo conjunto de prueba.
+La evaluación utiliza tres referencias simples sobre exactamente el mismo conjunto de prueba de **1,050 instancias**.
 
 ### Clase mayoritaria
 
 Predice siempre la clase más frecuente.
 
 ```text
-F1 macro = 0.2631
+F1 macro = 0.2609
 ```
 
 ### Persistencia
@@ -715,7 +840,7 @@ F1 macro = 0.2631
 Utiliza como predicción la clase observada en el periodo inmediatamente anterior.
 
 ```text
-F1 macro = 0.7141
+F1 macro = 0.7197
 ```
 
 ### Moda histórica
@@ -723,24 +848,49 @@ F1 macro = 0.7141
 Utiliza la clase históricamente más frecuente para cada unidad.
 
 ```text
-F1 macro = 0.7096
+F1 macro = 0.7132
 ```
 
-El modelo propio supera los tres baselines.
+El bosque propio:
+
+```text
+F1 macro = 0.7822
+```
+
+supera los tres baselines.
 
 ---
 
 ## 20. Rendimiento computacional
 
-La ejecución final registró aproximadamente:
+La corrida definitiva registró:
 
 ```text
-Preprocesamiento            : 251.1 s
-Entrenamiento bosque final  : 46.1 s
-Memoria pico                : 561.8 MB
+Preprocesamiento            : 143.6 s
+Construcción de X           : ~0.0 s
+Entrenamiento bosque final  : 25.5 s
+Memoria pico                : 562.6 MB
 ```
 
-El prefiltrado mensual de los archivos permitió controlar el consumo de memoria durante el procesamiento de los datos nacionales.
+El prefiltrado mensual controla el uso de memoria al evitar conservar simultáneamente registros nacionales fuera del alcance.
+
+### Convergencia del ensamble
+
+La curva de validación del **modelo definitivo** fue:
+
+```text
+B =   1  → F1 macro 0.7740
+B =   5  → F1 macro 0.8064
+B =  10  → F1 macro 0.8210
+B =  25  → F1 macro 0.8277
+B =  50  → F1 macro 0.8275
+B =  75  → F1 macro 0.8268
+B = 100  → F1 macro 0.8268
+```
+
+El desempeño se estabiliza aproximadamente a partir de **25–50 árboles**.
+
+Se conservan **100 árboles** como configuración final.
 
 ---
 
@@ -838,7 +988,8 @@ python -m pytest tests/ -q
 Resultado de la versión final:
 
 ```text
-35 passed
+..................................... [100%]
+37 passed
 ```
 
 ### Paso 3 — Ejecutar el notebook
@@ -877,12 +1028,12 @@ streamlit run app.py
 
 ## 24. Pruebas automáticas
 
-El proyecto contiene **35 pruebas automáticas**:
+El proyecto contiene **37 pruebas automáticas**:
 
 ```text
 7  pruebas del criterio Gini
 12 pruebas del pipeline
-16 pruebas de representación parroquia × día
+18 pruebas de representación parroquia × día
 ```
 
 Para ejecutarlas:
@@ -894,9 +1045,11 @@ python -m pytest tests/ -q
 Resultado final:
 
 ```text
-................................... [100%]
-35 passed
+..................................... [100%]
+37 passed
 ```
+
+Las pruebas de representación incluyen regresiones específicas para comprobar el tratamiento correcto de semanas incompletas.
 
 ---
 
@@ -940,53 +1093,79 @@ Contiene el bosque propio entrenado y los objetos necesarios para realizar predi
 
 Contiene la clasificación generada para la semana siguiente.
 
+### Gráficas
+
+Los artefactos gráficos incluyen:
+
+- análisis exploratorio;
+- convergencia del ensamble definitivo;
+- curva de calibración;
+- importancia de variables.
+
 ---
 
 ## 26. Conclusiones
 
-Se implementó satisfactoriamente un **Random Forest propio** para clasificar el nivel de riesgo de emergencias de tránsito por parroquia y día de la semana en el cantón Guayaquil.
+Se implementó satisfactoriamente un **Random Forest propio en NumPy** para clasificar el nivel de riesgo de emergencias de tránsito por parroquia y día de la semana en el cantón Guayaquil.
 
-El modelo obtuvo en el conjunto de prueba:
-
-```text
-F1 macro = 0.7783
-```
-
-superando:
+En el conjunto de prueba temporal definitivo obtuvo:
 
 ```text
-Persistencia      = 0.7141
-Moda histórica    = 0.7096
-Clase mayoritaria = 0.2631
+F1 macro = 0.7822
+Accuracy = 0.8114
 ```
 
-y alcanzando un desempeño comparable al Random Forest de `scikit-learn`:
+superando los tres baselines:
 
 ```text
-Bosque propio = 0.7783
-sklearn       = 0.7762
+Persistencia      = 0.7197
+Moda histórica    = 0.7132
+Clase mayoritaria = 0.2609
 ```
 
-El modelo mostró un desempeño especialmente alto para la clase **Alto**, aunque este resultado debe interpretarse considerando la fuerte concentración de eventos en la cabecera cantonal.
+y alcanzando un desempeño prácticamente equivalente al Random Forest de referencia:
 
-La clase **Medio** resultó ser la más difícil de discriminar, mostrando el principal espacio de mejora de la solución.
+```text
+Bosque propio = 0.7822
+sklearn       = 0.7807
+```
 
-La ejecución también confirmó que el comportamiento histórico reciente —particularmente rezagos, medias móviles y densidad histórica— tiene un papel relevante dentro de las decisiones del bosque.
+La clase **Alto** alcanzó:
 
-Finalmente, el proyecto integra en una única solución:
+```text
+F1     = 1.0000
+Recall = 1.0000
+```
 
-- procesamiento reproducible de datos reales;
-- representación temporal sin fuga de información;
-- Random Forest implementado desde cero;
-- validación temporal;
-- baselines;
+en prueba.
+
+Este resultado debe interpretarse considerando que sus ejemplos se encuentran concentrados en la cabecera cantonal.
+
+La clase **Medio**:
+
+```text
+F1 = 0.4923
+```
+
+continúa siendo el principal espacio de mejora.
+
+Las importancias del bosque muestran que los rezagos, medias móviles y densidad histórica de la parroquia tuvieron mayor peso interno que las variables simples de calendario, sin que ello implique causalidad.
+
+La versión final integra:
+
+- procesamiento reproducible de 54 archivos mensuales reales;
+- control de semanas incompletas;
+- representación parroquia × día sin inventar coordenadas ni hora;
+- prevención de fuga temporal;
+- Random Forest propio;
+- ajuste temporal y prueba independiente;
+- tres baselines;
 - benchmark externo;
-- métricas por clase;
-- evaluación por parroquia;
-- probabilidades;
+- métricas por clase y por parroquia;
+- probabilidades y calibración;
 - predicción de la semana siguiente;
-- interfaz gráfica;
-- pruebas automatizadas.
+- interfaz Streamlit;
+- **37 pruebas automatizadas**.
 
 ---
 
@@ -994,20 +1173,35 @@ Finalmente, el proyecto integra en una única solución:
 
 ```text
 Modelo          : Random Forest propio en NumPy
-F1 macro test   : 0.7783
-Accuracy test   : 0.8104
+
+Validación:
+F1 macro        : 0.8268
+
+Prueba:
+n               : 1,050
+F1 macro        : 0.7822
+Accuracy        : 0.8114
+F1 Bajo         : 0.8544
+F1 Medio        : 0.4923
+F1 Alto         : 1.0000
 Recall Alto     : 1.0000
-F1 Alto         : 0.9889
-F1 Medio        : 0.4912
-F1 Bajo         : 0.8547
+Brier           : 0.2845
+
+AUC OvR:
+Bajo            : 0.8595
+Medio           : 0.7903
+Alto            : 1.0000
 
 Baselines:
-Persistencia    : 0.7141
-Moda histórica  : 0.7096
-Mayoritaria     : 0.2631
+Persistencia    : 0.7197
+Moda histórica  : 0.7132
+Mayoritaria     : 0.2609
 
 Referencia:
-sklearn RF      : 0.7762
+sklearn RF      : 0.7807
+
+Semana objetivo : 2025-12-29
+Pruebas         : 37/37
 ```
 
 **Horizonte de predicción:** una semana.  
