@@ -92,10 +92,14 @@ if df is None:
 st.info(
     f"**Esto es una prediccion de la semana completa "
     f"{df['semana_objetivo'].iloc[0]}.** "
-    "El conjunto experimental utilizado en esta corrida termina el 31/12/2025. Por ello, dentro del periodo de estudio solo se encuentran los tres primeros días de la semana objetivo; los cuatro días restantes pertenecen a 2026 y quedan fuera del corte temporal del experimento. "
-    "dias de esa semana, pero faltan cuatro de sus siete dias. Por ello, la "
-    "semana se excluyo integramente del tensor observado y la prediccion se "
-    "construye utilizando unicamente semanas completas anteriores.")
+    "El periodo experimental utilizado en esta corrida termina el 31/12/2025. "
+    "Por ello, dentro del conjunto de estudio solo estan presentes los tres "
+    "primeros dias de la semana objetivo; los cuatro dias restantes pertenecen "
+    "a 2026 y quedan fuera del corte temporal del experimento. La semana se "
+    "excluyo integramente del tensor observado para evitar interpretar esos "
+    "dias externos al periodo como conteos cero. La prediccion utiliza "
+    "unicamente semanas completas anteriores."
+)
 
 # ---------------------------------------------------------------- filtros ---
 st.sidebar.header("Filtros")
