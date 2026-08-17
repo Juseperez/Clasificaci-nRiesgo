@@ -90,10 +90,12 @@ if df is None:
     st.stop()
 
 st.info(
-    f"**Esto es una prediccion, no un registro observado.** El modelo estima "
-    f"el nivel de riesgo de la semana objetivo **{df['semana_objetivo'].iloc[0]}** "
-    "a partir del historial de semanas anteriores; ningun incidente de esa "
-    "semana fue observado todavia.")
+    f"**Esto es una prediccion de la semana completa "
+    f"{df['semana_objetivo'].iloc[0]}.** "
+    "La fuente disponible contiene registros parciales de los tres primeros "
+    "dias de esa semana, pero faltan cuatro de sus siete dias. Por ello, la "
+    "semana se excluyo integramente del tensor observado y la prediccion se "
+    "construye utilizando unicamente semanas completas anteriores.")
 
 # ---------------------------------------------------------------- filtros ---
 st.sidebar.header("Filtros")
@@ -141,7 +143,7 @@ prom = d.loc[d["nivel"] != "Sin datos suficientes", "prob_clase_predicha"].mean(
 c4.metric("Probabilidad media", "n/d" if pd.isna(prom) else f"{prom:.2f}")
 
 tab_mapa, tab_tabla, tab_metricas = st.tabs(
-    ["Mapa de riesgo", "Detalle", "Desempeno del modelo"])
+    ["Matriz de riesgo", "Detalle", "Desempeno del modelo"])
 
 # ------------------------------------------------------- matriz de riesgo ---
 with tab_mapa:
@@ -154,26 +156,17 @@ with tab_mapa:
             st.caption(f"Umbrales de la etiqueta (fijos para las seis "
                        f"parroquias): {_umbrales_txt}.")
         with st.expander(
-            "Por que el riesgo Alto aparece casi siempre en Guayaquil"):
+            "Por que el riesgo Alto se concentra en Guayaquil"):
             st.markdown(
                 "El umbral que separa Medio de Alto es un **numero absoluto de "
                 "incidentes por dia**, igual para las seis parroquias, no un "
                 "porcentaje relativo a cada una.\n\n"
-                "El maximo diario observado en el historico de entrenamiento "
-                "fue:\n\n"
-                "- Guayaquil, cabecera cantonal: **450**\n"
-                "- Progreso: **9**\n"
-                "- Morro: **4**\n"
-                "- Posorja: **6**\n"
-                "- Puna: **1**\n"
-                "- Tenguel: **5**\n\n"
-                "Con un umbral compartido, ninguna parroquia fuera de la "
-                "cabecera puede llegar a clasificarse como Alto: no es una "
-                "limitacion del clasificador, es una consecuencia de la escala "
-                "de incidentes de cada parroquia frente a un umbral absoluto. "
-                "Que el modelo prediga Alto casi solo en Guayaquil no es, por "
-                "si solo, evidencia de que el modelo \"aprendio mal\": es lo "
-                "que la propia definicion de la etiqueta permite.")
+                "La cabecera cantonal presenta una escala historica de "
+                "incidentes muy superior a las demas parroquias. Con un umbral "
+                "global compartido, la clase Alto queda fuertemente concentrada "
+                "en Guayaquil. Por eso, el desempeño de esa clase debe leerse "
+                "junto con la distribucion por parroquia y no como evidencia de "
+                "un rendimiento uniforme en todo el canton.")
         dias_vis = [x for x in DIAS if x in sel_d]
         niveles = d.pivot_table(index="unidad", columns="dia_semana",
                                 values="nivel", aggfunc="first")

@@ -79,11 +79,11 @@ NumPy             : 2.5.2
 pandas            : 3.0.5
 ```
 
-El mismo notebook, sin ningún cambio de código, se ejecutó también en un
-segundo equipo (Windows 10 / Python 3.13.14 / 4 CPUs) y produjo métricas
-**bit a bit idénticas**: F1 macro 0.7822, exactitud 0.8114, umbrales P60=0 /
-P90=121. Solo variaron los tiempos y el pico de memoria, listados en la
-sección 20.
+El mismo pipeline se ejecutó también en un segundo equipo
+(Windows 10 / Python 3.13.14 / 4 CPUs) y reprodujo los mismos valores
+reportados de F1 macro (0.7822), exactitud (0.8114) y umbrales
+(P60=0, P90=121). Los tiempos de ejecución y el consumo de memoria
+variaron según el entorno.
 
 ---
 
@@ -391,22 +391,16 @@ escalera de respaldo (sección 7 del código, `caracteristicas.py`) existe
 precisamente para el caso en que los percentiles colapsan, y no se activó
 porque el peldaño `global` sí produjo las tres clases con masa suficiente.
 
-La consecuencia práctica es que, para cinco de las seis parroquias, el
-problema se reduce casi a una decisión binaria — ¿habrá al menos un incidente
-ese día? — porque ninguna de ellas se acerca al umbral de 121:
+La consecuencia práctica es que el umbral global de la clase Alto se aplica
+por igual a parroquias con escalas históricas de incidentes muy diferentes.
+La cabecera cantonal concentra la gran mayoría de los eventos y, en la
+evaluación final, los ejemplos de la clase Alto aparecen concentrados en esa
+unidad.
 
-| Parroquia | Máx. diario (train) | % días ≥ 1 incidente | % días > 121 |
-|---|---:|---:|---:|
-| Guayaquil, cabecera cantonal | 450 | 98.7 % | 59.5 % |
-| Juan Gómez Rendón (Progreso) | 9 | 60.8 % | 0.0 % |
-| Morro | 4 | 8.8 % | 0.0 % |
-| Posorja | 6 | 23.3 % | 0.0 % |
-| Puná | 1 | 0.5 % | 0.0 % |
-| Tenguel | 5 | 25.8 % | 0.0 % |
-
-Esta tabla es la base de la sección 11 y explica por qué la clase Alto queda
-casi exclusivamente reservada a la cabecera cantonal.
-
+Por ello, el desempeño de la clase Alto debe interpretarse junto con la
+distribución espacial y con las métricas por parroquia. La principal dificultad
+predictiva del modelo se encuentra en la separación entre las clases Bajo y
+Medio.
 ---
 
 ## 9. Random Forest propio
@@ -583,14 +577,21 @@ La clase **Medio** continúa siendo la más difícil de discriminar.
 
 El desempeño perfecto observado para la clase **Alto** debe interpretarse junto con la fuerte concentración de esa clase en la cabecera cantonal.
 
-### La clase Alto es estructuralmente degenerada
+### Interpretación de la clase Alto
 
-La clase Alto es estructuralmente degenerada: `P90 = 121` es un umbral absoluto y el máximo diario histórico de las otras cinco parroquias es 9, 4, 6, 1 y 5 incidentes (sección 8). Ninguna puede alcanzarlo.
+El umbral superior `P90 = 121` es global y se aplica de la misma forma a las
+seis parroquias. Debido a la fuerte concentración de incidentes en la cabecera
+cantonal, los ejemplos de la clase Alto del conjunto de prueba se concentran
+en esa parroquia.
 
-Una regla trivial sin modelo, `unidad == cabecera → Alto`, obtiene **F1 = 1.0000 en prueba** y 0.9972 en validación: exactamente lo mismo que el clasificador propio.
+Por esta razón, `F1 Alto = 1.0000` y `Recall Alto = 1.0000` deben interpretarse
+con cautela: describen correctamente el comportamiento del modelo sobre el
+conjunto de prueba utilizado, pero no demuestran un desempeño uniforme para
+la clase Alto en todas las parroquias.
 
-Por tanto, de los tres sumandos del F1 macro, uno se obtiene sin aprendizaje. La capacidad predictiva real del modelo debe leerse sobre Bajo/Medio, donde el bosque propio obtiene **0.6734** frente a 0.6532 de la mejor referencia (moda histórica) y 0.5796 de persistencia — un margen de +0.020 y +0.094 respectivamente, modesto pero real. El F1 macro de 0.7822 sigue siendo la métrica titular del proyecto y se reporta sin cambios; esta sección es la lectura que lo acompaña, no un reemplazo.
-
+La clase Medio (`F1 = 0.4923`) continúa siendo el principal reto del
+clasificador y la separación Bajo/Medio es la parte más informativa para
+evaluar futuras mejoras del modelo.
 ---
 
 ## 12. Comparación con scikit-learn
@@ -675,7 +676,7 @@ F1 Alto = 1.0000
 
 no debe interpretarse como evidencia de desempeño uniforme en todo el cantón.
 
-Esta tabla es la evidencia directa de la degeneración de la clase Alto descrita en la sección 11: la columna Alto es 0 para las cinco parroquias no cabecera, en las tres particiones (train, validación y prueba).
+La tabla muestra que, en el conjunto de prueba, los ejemplos de la clase Alto están concentrados en la cabecera cantonal. Esta concentración debe considerarse al interpretar el F1 de esa clase.
 
 La diferenciación entre **Bajo** y **Medio** constituye el principal reto del clasificador.
 
@@ -727,7 +728,7 @@ Esta semana se encuentra dentro del:
 BURN_IN = 12
 ```
 
-y por eso **no se utiliza como objetivo supervisado**: los tres días faltantes solo podrían distorsionar una etiqueta si esa semana llegara a ser una fila de entrenamiento, validación o prueba, y el burn-in lo impide.
+y por eso **no se utiliza como objetivo supervisado**. No obstante, al formar parte del historial inicial, esta semana parcial puede influir marginalmente en algunas características históricas de las primeras instancias posteriores al burn-in. Se documenta como una limitación de borde temporal.
 
 El sistema también descarta explícitamente la semana final incompleta.
 
@@ -771,7 +772,7 @@ No se identificó una regla objetiva y verificable que permitiera corregir o rec
 
 Por ello, **no se realizaron imputaciones ni reclasificaciones artificiales**: el archivo se conservó tal como fue publicado y la anomalía se documenta como una limitación de calidad de la fuente.
 
-Consecuencia directa sobre las etiquetas: los **16 días clasificados como Bajo en la cabecera cantonal durante el entrenamiento** (frente a una mayoría de Medio/Alto el resto del periodo) provienen íntegramente de este defecto de la fuente — corresponden a las cinco semanas de enero de 2024, cuando el conteo diario de la cabecera cae a valores de 0 a 2 incidentes por la caída puntual de registros. No se trata de una variación real del riesgo.
+La anomalía puede generar conteos anormalmente bajos y afectar las etiquetas y características correspondientes a ese periodo. Como no existe una regla verificable para reconstruir los registros faltantes o reclasificarlos, se conserva el archivo original y se documenta este efecto como una limitación de calidad de la fuente.
 
 ---
 

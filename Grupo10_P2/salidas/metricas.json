@@ -1,10 +1,10 @@
 {
   "entorno": {
-    "fecha_ejecucion": "2026-08-16T15:07:30-05:00",
-    "python": "3.14.3",
-    "sistema": "Windows 11",
-    "procesador": "Intel64 Family 6 Model 142 Stepping 10, GenuineIntel",
-    "cpus": 8,
+    "fecha_ejecucion": "2026-08-16T19:25:20-05:00",
+    "python": "3.13.14",
+    "sistema": "Windows 10",
+    "procesador": "Intel64 Family 6 Model 142 Stepping 9, GenuineIntel",
+    "cpus": 4,
     "numpy": "2.5.2",
     "pandas": "3.0.5"
   },
@@ -289,10 +289,10 @@
     "submuestra_por_arbol": 7224
   },
   "tiempos_s": {
-    "preprocesamiento": 128.6,
+    "preprocesamiento": 125.4,
     "construccion_X": 0.0,
-    "entrenamiento_bosque_definitivo": 18.9
+    "entrenamiento_bosque_definitivo": 23.4
   },
-  "memoria_pico_MB": 593.2,
+  "memoria_pico_MB": 558.2,
   "semana_objetivo": "2025-12-29"
 }
