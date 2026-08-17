@@ -69,21 +69,21 @@ La versión final verifica:
 
 La corrida definitiva se realizó el **16 de agosto de 2026**.
 
-Entorno registrado:
+Entorno de la corrida definitiva:
 
 ```text
-Sistema operativo : Windows 11
-Python            : 3.14.3
-CPU disponibles   : 8
+Sistema operativo : Windows 10
+Python            : 3.13.14
+CPU disponibles   : 4
 NumPy             : 2.5.2
 pandas            : 3.0.5
 ```
 
-El mismo notebook, sin ningún cambio de código, se ejecutó también en un
-segundo equipo (Windows 10 / Python 3.13.14 / 4 CPUs) y produjo métricas
-**bit a bit idénticas**: F1 macro 0.7822, exactitud 0.8114, umbrales P60=0 /
-P90=121. Solo variaron los tiempos y el pico de memoria, listados en la
-sección 20.
+El mismo pipeline también fue ejecutado en un segundo equipo
+(Windows 11 / Python 3.14.3 / 8 CPUs) y reprodujo los mismos valores
+reportados de F1 macro (0.7822), exactitud (0.8114) y umbrales
+(P60=0, P90=121). Los tiempos de ejecución y el consumo de memoria
+variaron según el entorno.
 
 ---
 
@@ -330,7 +330,7 @@ La fuente no contiene coordenadas, por lo que no existe una relación geométric
 
 ### `Cod_Parroquia` no es una variable numérica del modelo
 
-`Cod_Parroquia` no entra al modelo como número: solo se usa como índice de fila del tensor (sección 6). Sin embargo, la señal espacial no desaparece del todo: `densidad_historica_parroquia` es una media histórica **por unidad**, y en la práctica identifica a la cabecera cantonal de forma casi unívoca, porque su volumen de incidentes no se superpone con el de las otras cinco parroquias. Esto es coherente con el diseño (la unidad no debe tratarse como un número ordenado) y se documenta aquí para que quede explícito qué parte de la identidad de la unidad sí llega al modelo, y por qué vía.
+`Cod_Parroquia` no entra al modelo como una variable numérica ni ordinal; se utiliza para identificar la unidad espacial y organizar el tensor. La señal histórica específica de cada unidad sí puede llegar al modelo mediante `densidad_historica_parroquia`, calculada exclusivamente con información previa a la semana objetivo.
 
 ---
 
@@ -391,22 +391,16 @@ escalera de respaldo (sección 7 del código, `caracteristicas.py`) existe
 precisamente para el caso en que los percentiles colapsan, y no se activó
 porque el peldaño `global` sí produjo las tres clases con masa suficiente.
 
-La consecuencia práctica es que, para cinco de las seis parroquias, el
-problema se reduce casi a una decisión binaria — ¿habrá al menos un incidente
-ese día? — porque ninguna de ellas se acerca al umbral de 121:
+La consecuencia práctica es que el umbral global de la clase Alto se aplica
+por igual a parroquias con escalas históricas de incidentes muy diferentes.
+La cabecera cantonal concentra la gran mayoría de los eventos y, en la
+evaluación final, los ejemplos de la clase Alto aparecen concentrados en esa
+unidad.
 
-| Parroquia | Máx. diario (train) | % días ≥ 1 incidente | % días > 121 |
-|---|---:|---:|---:|
-| Guayaquil, cabecera cantonal | 450 | 98.7 % | 59.5 % |
-| Juan Gómez Rendón (Progreso) | 9 | 60.8 % | 0.0 % |
-| Morro | 4 | 8.8 % | 0.0 % |
-| Posorja | 6 | 23.3 % | 0.0 % |
-| Puná | 1 | 0.5 % | 0.0 % |
-| Tenguel | 5 | 25.8 % | 0.0 % |
-
-Esta tabla es la base de la sección 11 y explica por qué la clase Alto queda
-casi exclusivamente reservada a la cabecera cantonal.
-
+Por ello, el desempeño de la clase Alto debe interpretarse junto con la
+distribución espacial y con las métricas por parroquia. La principal dificultad
+predictiva del modelo se encuentra en la separación entre las clases Bajo y
+Medio.
 ---
 
 ## 9. Random Forest propio
@@ -549,15 +543,13 @@ El Brier reportado es la versión multiclase en forma-suma (media del error cuad
 
 ### Comparación sobre el conjunto de prueba
 
-| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Media F1 Bajo/Medio | Recall Alto | Brier |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| **Bosque propio (NumPy)** | **0.8114** | **0.7822** | **0.8544** | 0.4923 | **1.0000** | **0.6734** | **1.0000** | **0.2845** |
-| sklearn RandomForest | 0.8000 | 0.7807 | 0.8421 | **0.5000** | 1.0000 | 0.6711 | 1.0000 | 0.3060 |
-| Persistencia | 0.7533 | 0.7197 | 0.8083 | 0.3509 | 1.0000 | 0.5796 | 1.0000 | — |
-| Moda histórica | 0.7743 | 0.7132 | 0.8640 | 0.4424 | 0.8333 | 0.6532 | 0.7143 | — |
-| Clase mayoritaria | 0.6429 | 0.2609 | 0.7826 | 0.0000 | 0.0000 | 0.3913 | 0.0000 | — |
-
-La columna **Media F1 Bajo/Medio** se explica en el bloque siguiente: es la métrica complementaria que aísla la parte del problema que no está resuelta de antemano por la geografía.
+| Modelo | Accuracy | F1 macro | F1 Bajo | F1 Medio | F1 Alto | Recall Alto | Brier |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **Bosque propio (NumPy)** | **0.8114** | **0.7822** | **0.8544** | 0.4923 | **1.0000** | **1.0000** | **0.2845** |
+| sklearn RandomForest | 0.8000 | 0.7807 | 0.8421 | **0.5000** | 1.0000 | 1.0000 | 0.3060 |
+| Persistencia | 0.7533 | 0.7197 | 0.8083 | 0.3509 | 1.0000 | 1.0000 | — |
+| Moda histórica | 0.7743 | 0.7132 | 0.8640 | 0.4424 | 0.8333 | 0.7143 | — |
+| Clase mayoritaria | 0.6429 | 0.2609 | 0.7826 | 0.0000 | 0.0000 | 0.0000 | — |
 
 Resultados principales del modelo propio:
 
@@ -583,14 +575,21 @@ La clase **Medio** continúa siendo la más difícil de discriminar.
 
 El desempeño perfecto observado para la clase **Alto** debe interpretarse junto con la fuerte concentración de esa clase en la cabecera cantonal.
 
-### La clase Alto es estructuralmente degenerada
+### Interpretación de la clase Alto
 
-La clase Alto es estructuralmente degenerada: `P90 = 121` es un umbral absoluto y el máximo diario histórico de las otras cinco parroquias es 9, 4, 6, 1 y 5 incidentes (sección 8). Ninguna puede alcanzarlo.
+El umbral superior `P90 = 121` es global y se aplica de la misma forma a las
+seis parroquias. Debido a la fuerte concentración de incidentes en la cabecera
+cantonal, los ejemplos de la clase Alto del conjunto de prueba se concentran
+en esa parroquia.
 
-Una regla trivial sin modelo, `unidad == cabecera → Alto`, obtiene **F1 = 1.0000 en prueba** y 0.9972 en validación: exactamente lo mismo que el clasificador propio.
+Por esta razón, `F1 Alto = 1.0000` y `Recall Alto = 1.0000` deben interpretarse
+con cautela: describen correctamente el comportamiento del modelo sobre el
+conjunto de prueba utilizado, pero no demuestran un desempeño uniforme para
+la clase Alto en todas las parroquias.
 
-Por tanto, de los tres sumandos del F1 macro, uno se obtiene sin aprendizaje. La capacidad predictiva real del modelo debe leerse sobre Bajo/Medio, donde el bosque propio obtiene **0.6734** frente a 0.6532 de la mejor referencia (moda histórica) y 0.5796 de persistencia — un margen de +0.020 y +0.094 respectivamente, modesto pero real. El F1 macro de 0.7822 sigue siendo la métrica titular del proyecto y se reporta sin cambios; esta sección es la lectura que lo acompaña, no un reemplazo.
-
+La clase Medio (`F1 = 0.4923`) continúa siendo el principal reto del
+clasificador y la separación Bajo/Medio es la parte más informativa para
+evaluar futuras mejoras del modelo.
 ---
 
 ## 12. Comparación con scikit-learn
@@ -675,7 +674,7 @@ F1 Alto = 1.0000
 
 no debe interpretarse como evidencia de desempeño uniforme en todo el cantón.
 
-Esta tabla es la evidencia directa de la degeneración de la clase Alto descrita en la sección 11: la columna Alto es 0 para las cinco parroquias no cabecera, en las tres particiones (train, validación y prueba).
+La tabla muestra que, en el conjunto de prueba, los ejemplos de la clase Alto están concentrados en la cabecera cantonal. Esta concentración debe considerarse al interpretar el F1 de esa clase.
 
 La diferenciación entre **Bajo** y **Medio** constituye el principal reto del clasificador.
 
@@ -727,7 +726,7 @@ Esta semana se encuentra dentro del:
 BURN_IN = 12
 ```
 
-y por eso **no se utiliza como objetivo supervisado**: los tres días faltantes solo podrían distorsionar una etiqueta si esa semana llegara a ser una fila de entrenamiento, validación o prueba, y el burn-in lo impide.
+y por eso **no se utiliza como objetivo supervisado**. No obstante, al formar parte del historial inicial, esta semana parcial puede influir marginalmente en algunas características históricas de las primeras instancias posteriores al burn-in. Se documenta como una limitación de borde temporal.
 
 El sistema también descarta explícitamente la semana final incompleta.
 
@@ -771,7 +770,7 @@ No se identificó una regla objetiva y verificable que permitiera corregir o rec
 
 Por ello, **no se realizaron imputaciones ni reclasificaciones artificiales**: el archivo se conservó tal como fue publicado y la anomalía se documenta como una limitación de calidad de la fuente.
 
-Consecuencia directa sobre las etiquetas: los **16 días clasificados como Bajo en la cabecera cantonal durante el entrenamiento** (frente a una mayoría de Medio/Alto el resto del periodo) provienen íntegramente de este defecto de la fuente — corresponden a las cinco semanas de enero de 2024, cuando el conteo diario de la cabecera cae a valores de 0 a 2 incidentes por la caída puntual de registros. No se trata de una variación real del riesgo.
+La anomalía puede generar conteos anormalmente bajos y afectar las etiquetas y características correspondientes a ese periodo. Como no existe una regla verificable para reconstruir los registros faltantes o reclasificarlos, se conserva el archivo original y se documenta este efecto como una limitación de calidad de la fuente.
 
 ---
 
@@ -924,17 +923,17 @@ supera los tres baselines.
 La corrida definitiva registró:
 
 ```text
-Preprocesamiento            : 128.6 s
+Preprocesamiento            : 125.4 s
 Construcción de X           : ~0.0 s
-Entrenamiento bosque final  : 18.9 s
-Memoria pico                : 593.2 MB
+Entrenamiento bosque final  : 23.4 s
+Memoria pico                : 558.2 MB
 ```
 
 El prefiltrado mensual controla el uso de memoria al evitar conservar simultáneamente registros nacionales fuera del alcance.
 
 ### Reproducibilidad entre equipos
 
-El pipeline es determinista. La misma versión del notebook se ejecutó en dos equipos distintos —Windows 10 / Python 3.13.14 / 4 CPU y Windows 11 / Python 3.14.3 / 8 CPU— y produjo métricas idénticas hasta el último decimal (F1 macro 0.7822, Accuracy 0.8114, umbrales 0/121). Solo variaron los tiempos y la memoria, que dependen del hardware y no del código ni de la semilla.
+La misma versión del pipeline se ejecutó en dos equipos distintos —Windows 10 / Python 3.13.14 / 4 CPU y Windows 11 / Python 3.14.3 / 8 CPU— y reprodujo los mismos valores reportados de F1 macro (0.7822), exactitud (0.8114) y umbrales (P60=0, P90=121). Los tiempos de ejecución y el consumo de memoria variaron según el entorno.
 
 ### Convergencia del ensamble
 
@@ -1001,7 +1000,7 @@ Grupo10_P2/
 
 ## 22. Instalación
 
-Versión de Python probada: **3.14.3** (también verificado en 3.13.14). Se recomienda utilizar un entorno virtual.
+Versión de Python de la corrida definitiva: **3.13.14** (también verificado en 3.14.3). Se recomienda utilizar un entorno virtual.
 
 ### Windows
 
