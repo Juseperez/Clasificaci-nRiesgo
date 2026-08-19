@@ -1,0 +1,29 @@
+# Tema propio de la interfaz (Componente 3 - UC3): consola de riesgo, no
+# dashboard generico. Navy profundo, un solo acento sobrio (bronce), sin
+# serif de "editorial IA". Mecanismo nativo de Streamlit; sin fuentes de
+# internet (fuentes de Windows), para que la demo funcione sin conexion.
+[theme]
+base = "dark"
+primaryColor = "#C9A24B"
+backgroundColor = "#0B0F19"
+secondaryBackgroundColor = "#12182A"
+textColor = "#E7EAF3"
+font = "Segoe UI, Calibri, 'Helvetica Neue', Arial, sans-serif"
+headingFont = "Segoe UI, Calibri, Arial, sans-serif"
+headingFontWeights = 700
+baseRadius = "small"
+baseFontSize = 16
+metricValueFontSize = "1.9rem"
+metricValueFontWeight = 600
+codeFont = "Consolas, 'Cascadia Mono', 'Courier New', monospace"
+dataframeHeaderBackgroundColor = "#12182A"
+
+# Sidebar un escalon mas oscuro que el contenido: separa filtros de lectura
+# sin usar un borde.
+[theme.sidebar]
+backgroundColor = "#080B12"
+secondaryBackgroundColor = "#12182A"
+textColor = "#E7EAF3"
+
+[client]
+toolbarMode = "auto"
