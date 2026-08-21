@@ -82,30 +82,38 @@ class MatrizRiesgo:
         v, k = np.unique(self.nivel.ravel(), return_counts=True)
         return {NIVELES.get(int(a), "Sin datos suficientes"): int(b) for a, b in zip(v, k)}
 
+def _predecir_proba(modelo, X):
+    """Interfaz comun para bosque propio y modelos de scikit-learn."""
+    if hasattr(modelo, "predecirProba"):
+        return modelo.predecirProba(X)
 
-def predecir_matriz_semana(bosque, X, indices, mask_elegible):
-    """
-    Predice la semana objetivo pasando por el modelo UNICAMENTE las unidades
-    elegibles.
+    if hasattr(modelo, "predict_proba"):
+        return modelo.predict_proba(X)
 
-    La Tarea #4 dice que las unidades sin incidentes historicos no ingresan al
-    modelo. Predecir las G*T combinaciones y pintar despues en gris las no
-    elegibles daria el mismo resultado visual, pero haria falsa esa afirmacion:
-    el clasificador si habria opinado sobre ellas. Aqui solo se evaluan las
-    filas elegibles y el resto de la matriz queda en NaN.
+    raise TypeError(
+        f"El modelo {type(modelo).__name__} no implementa probabilidades."
+    )
 
-    Devuelve (proba, n_predichas) con proba de forma (G*T, 3).
-    """
+def predecir_matriz_semana(modelo, X, indices, mask_elegible):
     indices = np.asarray(indices)
     elegibles = np.asarray(mask_elegible).reshape(-1)
+
     if indices.size != elegibles.size:
-        raise ValueError(f"indices ({indices.size}) y mascara ({elegibles.size}) "
-                         "deben cubrir las mismas G*T combinaciones")
+        raise ValueError(
+            f"indices ({indices.size}) y mascara ({elegibles.size}) "
+            "deben cubrir las mismas G*T combinaciones"
+        )
 
     proba = np.full((indices.size, 3), np.nan, dtype=np.float32)
+
     n = int(elegibles.sum())
+
     if n:
-        proba[elegibles] = bosque.predecirProba(X[indices[elegibles]])
+        proba[elegibles] = _predecir_proba(
+            modelo,
+            X[indices[elegibles]]
+        )
+
     return proba, n
 
 

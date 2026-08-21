@@ -224,7 +224,7 @@ df, met = cargar()
 
 with st.sidebar.container(key="ficha_sidebar"):
     st.markdown("**Grupo #10 · Paralelo P2**")
-    st.caption("CCPG1044 — IA · ESPOL · Random Forest propio (sin sklearn en la prediccion)")
+    st.caption("CCPG1044 — IA · ESPOL")
 
 st.title("Riesgo de transito en Guayaquil")
 st.caption("Predicción por parroquia y día de la semana")

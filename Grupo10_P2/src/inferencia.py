@@ -324,40 +324,94 @@ def predecir_desde_csv_nuevo(ruta_csv, ruta_modelo=RUTA_MODELO,
     Si ok=False: el historial en disco y todos los artefactos congelados
     quedan exactamente como estaban. No se ejecuta ninguna inferencia.
     """
-    modelo = cargar_modelo(ruta_modelo)
-    meta_congelada = modelo["meta"]
-    bosque = modelo["bosque"]
-    mask_congelada = modelo["mask_elegible"]
-    umbrales = modelo["umbrales"]
-    nombres_esperados = modelo["nombres"]
+    paquete = cargar_modelo(ruta_modelo)
+
+    meta_congelada = paquete["meta"]
+    mask_congelada = paquete["mask_elegible"]
+    umbrales = paquete["umbrales"]
+    nombres_esperados = paquete["nombres"]
+
+    # Compatibilidad entre el artefacto nuevo y los antiguos
+    if "modelo" in paquete:
+        estimador = paquete["modelo"]
+    else:
+        estimador = paquete["bosque"]
 
     historial = cargar_historial(ruta_historial, ruta_datos_semilla)
 
-    df_valido, mensaje = validar_csv(ruta_csv, meta_congelada, historial, hoy=hoy)
-    if df_valido is None:
-        return {"ok": False, "mensaje": mensaje, "semana_objetivo": None,
-                "matriz": None, "resumen": None, "n_registros_nuevos": 0,
-                "n_registros_historial": len(historial)}
+    df_valido, mensaje = validar_csv(
+        ruta_csv,
+        meta_congelada,
+        historial,
+        hoy=hoy
+    )
 
-    historial_actualizado, _n_dup_hist = incorporar_historial(historial, df_valido)
+    if df_valido is None:
+        return {
+            "ok": False,
+            "mensaje": mensaje,
+            "semana_objetivo": None,
+            "matriz": None,
+            "resumen": None,
+            "n_registros_nuevos": 0,
+            "n_registros_historial": len(historial)
+        }
+
+    historial_actualizado, _n_dup_hist = incorporar_historial(
+        historial,
+        df_valido
+    )
 
     sem_tr = semanas_train_congeladas(meta_congelada)
-    c, meta_ext = reconstruir_tensor(historial_actualizado, meta_congelada)
+    c, meta_ext = reconstruir_tensor(
+        historial_actualizado,
+        meta_congelada
+    )
 
     gc_ = GeneradorCaracteristicas()
-    X, nombres = gc_.construirX(c, meta_ext, sem_tr, semanas_futuras=1,
-                                mask_elegible=mask_congelada)
+
+    X, nombres = gc_.construirX(
+        c,
+        meta_ext,
+        sem_tr,
+        semanas_futuras=1,
+        mask_elegible=mask_congelada
+    )
+
     if nombres != nombres_esperados:
-        raise CSVInvalido("Las features generadas no coinciden con las del "
-                          "modelo congelado; abortando sin guardar el historial.")
+        raise CSVInvalido(
+            "Las features generadas no coinciden con las del "
+            "modelo congelado; abortando sin guardar el historial."
+        )
 
     G, T = meta_congelada["G"], meta_congelada["T"]
     S_obs = c.shape[2]
-    i_sig = gc_.indices_semana_futura(G, T, S_obs, k=0)
-    proba, _n_predichas = predecir_matriz_semana(bosque, X, i_sig, mask_congelada)
 
-    mr = MatrizRiesgo(meta_ext, gc_.fecha_semana_futura(0), umbrales=umbrales)
-    mr.desde_predicciones(proba, mascara_sin_datos=~mask_congelada)
+    i_sig = gc_.indices_semana_futura(
+        G,
+        T,
+        S_obs,
+        k=0
+    )
+
+    proba, _ = predecir_matriz_semana(
+        estimador,
+        X,
+        i_sig,
+        mask_congelada
+    )
+
+    mr = MatrizRiesgo(
+        meta_ext,
+        gc_.fecha_semana_futura(0),
+        umbrales=umbrales
+    )
+
+    mr.desde_predicciones(
+        proba,
+        mascara_sin_datos=~mask_congelada
+    )
+
     matriz = mr.a_dataframe()
 
     if guardar:

@@ -536,7 +536,10 @@ def test_reproduce_matriz_riesgo_real_y_no_altera_artefactos_congelados():
     from src.riesgo import predecir_matriz_semana, MatrizRiesgo
     G, T = meta["G"], meta["T"]
     i_sig = gc_.indices_semana_futura(G, T, c_recon.shape[2], k=0)
-    proba, _n = predecir_matriz_semana(modelo["bosque"], X, i_sig, modelo["mask_elegible"])
+    estimador = modelo.get("modelo", modelo["bosque"])
+    proba, _n = predecir_matriz_semana(
+        estimador, X, i_sig, modelo["mask_elegible"]
+    )
     mr = MatrizRiesgo(meta_ext, gc_.fecha_semana_futura(0), umbrales=modelo["umbrales"])
     mr.desde_predicciones(proba, mascara_sin_datos=~modelo["mask_elegible"])
     recon_df = mr.a_dataframe()

@@ -1,0 +1,6 @@
+﻿modelo,F1 macro validacion,tiempo ajuste s,configuracion
+extra trees,0.83224,8.932,"{""n_estimators"": 300, ""max_depth"": 16, ""min_samples_leaf"": 5, ""max_features"": ""sqrt"", ""class_weight"": ""balanced""}"
+regresion logistica,0.830315,0.485,"{""C"": 0.01, ""class_weight"": ""balanced"", ""scaler"": ""StandardScaler(train)""}"
+bosque propio,0.8268,24.122,"{""nArboles"": 100, ""profundidadMax"": 16, ""minMuestrasHoja"": 5, ""mAtributos"": null, ""maxMuestrasPorArbol"": 200000, ""nBins"": 32, ""semilla"": 42, ""potenciaPesos"": 1.0}"
+mlp,0.825253,73.606,"{""hidden_layer_sizes"": [32], ""alpha"": 0.001, ""learning_rate_init"": 0.001, ""max_iter"": 800, ""sample_weight"": ""balanceado con train"", ""scaler"": ""StandardScaler(train)""}"
+gradient boosting,0.822416,20.749,"{""n_estimators"": 100, ""learning_rate"": 0.05, ""max_depth"": 2, ""sample_weight"": ""balanceado con train""}"

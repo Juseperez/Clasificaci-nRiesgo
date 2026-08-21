@@ -1,0 +1,150 @@
+{
+  "criterio_seleccion": "F1 macro en validacion temporal",
+  "modelo_mejor_validacion": "extra trees",
+  "nota_test": "El test se evalua solo despues de congelar todas las configuraciones.",
+  "entorno": {
+    "python": "3.13.14",
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "scikit_learn": "1.9.0"
+  },
+  "validacion": [
+    {
+      "modelo": "extra trees",
+      "F1 macro validacion": 0.83224,
+      "tiempo ajuste s": 8.932,
+      "configuracion": "{\"n_estimators\": 300, \"max_depth\": 16, \"min_samples_leaf\": 5, \"max_features\": \"sqrt\", \"class_weight\": \"balanced\"}"
+    },
+    {
+      "modelo": "regresion logistica",
+      "F1 macro validacion": 0.830315,
+      "tiempo ajuste s": 0.485,
+      "configuracion": "{\"C\": 0.01, \"class_weight\": \"balanced\", \"scaler\": \"StandardScaler(train)\"}"
+    },
+    {
+      "modelo": "bosque propio",
+      "F1 macro validacion": 0.8268,
+      "tiempo ajuste s": 24.122,
+      "configuracion": "{\"nArboles\": 100, \"profundidadMax\": 16, \"minMuestrasHoja\": 5, \"mAtributos\": null, \"maxMuestrasPorArbol\": 200000, \"nBins\": 32, \"semilla\": 42, \"potenciaPesos\": 1.0}"
+    },
+    {
+      "modelo": "mlp",
+      "F1 macro validacion": 0.825253,
+      "tiempo ajuste s": 73.606,
+      "configuracion": "{\"hidden_layer_sizes\": [32], \"alpha\": 0.001, \"learning_rate_init\": 0.001, \"max_iter\": 800, \"sample_weight\": \"balanceado con train\", \"scaler\": \"StandardScaler(train)\"}"
+    },
+    {
+      "modelo": "gradient boosting",
+      "F1 macro validacion": 0.822416,
+      "tiempo ajuste s": 20.749,
+      "configuracion": "{\"n_estimators\": 100, \"learning_rate\": 0.05, \"max_depth\": 2, \"sample_weight\": \"balanceado con train\"}"
+    }
+  ],
+  "test": [
+    {
+      "modelo": "mlp",
+      "exactitud": 0.819048,
+      "F1 macro": 0.791798,
+      "F1 bajo": 0.860088,
+      "F1 medio": 0.515306,
+      "F1 alto": 1.0,
+      "recall alto": 1.0,
+      "Brier": 0.291425,
+      "AUC bajo": 0.863423,
+      "AUC medio": 0.793624,
+      "AUC alto": 1.0
+    },
+    {
+      "modelo": "regresion logistica",
+      "exactitud": 0.82,
+      "F1 macro": 0.787006,
+      "F1 bajo": 0.862345,
+      "F1 medio": 0.498674,
+      "F1 alto": 1.0,
+      "recall alto": 1.0,
+      "Brier": 0.275356,
+      "AUC bajo": 0.875504,
+      "AUC medio": 0.8144,
+      "AUC alto": 1.0
+    },
+    {
+      "modelo": "extra trees",
+      "exactitud": 0.812381,
+      "F1 macro": 0.785293,
+      "F1 bajo": 0.854613,
+      "F1 medio": 0.501266,
+      "F1 alto": 1.0,
+      "recall alto": 1.0,
+      "Brier": 0.287086,
+      "AUC bajo": 0.864751,
+      "AUC medio": 0.798641,
+      "AUC alto": 1.0
+    },
+    {
+      "modelo": "gradient boosting",
+      "exactitud": 0.812381,
+      "F1 macro": 0.783735,
+      "F1 bajo": 0.85504,
+      "F1 medio": 0.496164,
+      "F1 alto": 1.0,
+      "recall alto": 1.0,
+      "Brier": 0.295521,
+      "AUC bajo": 0.873503,
+      "AUC medio": 0.806915,
+      "AUC alto": 1.0
+    },
+    {
+      "modelo": "bosque propio",
+      "exactitud": 0.811429,
+      "F1 macro": 0.78224,
+      "F1 bajo": 0.854412,
+      "F1 medio": 0.492308,
+      "F1 alto": 1.0,
+      "recall alto": 1.0,
+      "Brier": 0.284501,
+      "AUC bajo": 0.859532,
+      "AUC medio": 0.790282,
+      "AUC alto": 1.0
+    }
+  ],
+  "configuraciones": {
+    "bosque propio": {
+      "nArboles": 100,
+      "profundidadMax": 16,
+      "minMuestrasHoja": 5,
+      "mAtributos": null,
+      "maxMuestrasPorArbol": 200000,
+      "nBins": 32,
+      "semilla": 42,
+      "potenciaPesos": 1.0
+    },
+    "extra trees": {
+      "n_estimators": 300,
+      "max_depth": 16,
+      "min_samples_leaf": 5,
+      "max_features": "sqrt",
+      "class_weight": "balanced"
+    },
+    "regresion logistica": {
+      "C": 0.01,
+      "class_weight": "balanced",
+      "scaler": "StandardScaler(train)"
+    },
+    "gradient boosting": {
+      "n_estimators": 100,
+      "learning_rate": 0.05,
+      "max_depth": 2,
+      "sample_weight": "balanceado con train"
+    },
+    "mlp": {
+      "hidden_layer_sizes": [
+        32
+      ],
+      "alpha": 0.001,
+      "learning_rate_init": 0.001,
+      "max_iter": 800,
+      "sample_weight": "balanceado con train",
+      "scaler": "StandardScaler(train)"
+    }
+  }
+}
